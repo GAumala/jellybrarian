@@ -12,7 +12,7 @@ func New(cfg *config.Config) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /media/list", func(w http.ResponseWriter, r *http.Request) {
-		names, err := media.List(cfg.MediaDir)
+		names, err := media.List(cfg.Directories)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -28,7 +28,7 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 
-		linked, err := media.OrganizeArtist(cfg.MediaDir, cfg.JellyfinMusicDir, artist)
+		linked, err := media.OrganizeArtist(cfg.Directories, artist)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

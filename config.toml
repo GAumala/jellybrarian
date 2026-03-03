@@ -1,7 +1,7 @@
 # media-manager configuration
 
-# Directory where all media files live (downloads, rips, etc.)
-media_dir = "/mnt/hdd0/media"
-
-# Where Jellyfin expects music in Artist/Album/Track hierarchy
-jellyfin_music_dir = "/mnt/hdd0/jellyfin/music"
+[directories]
+media           = "/mnt/hdd0/media"
+jellyfin_music  = "/mnt/hdd0/jellyfin/music"
+jellyfin_movies = "/mnt/hdd0/jellyfin/movies"
+jellyfin_tv     = "/mnt/hdd0/jellyfin/tv"

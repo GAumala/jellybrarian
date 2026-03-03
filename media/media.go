@@ -8,11 +8,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gabriel/media-manager/config"
 )
 
-// List returns entries in dir sorted by modification time ascending (oldest first).
-func List(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
+// List returns entries in the media dir sorted by modification time ascending (oldest first).
+func List(dirs config.Directories) ([]string, error) {
+	entries, err := os.ReadDir(dirs.Media)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dir: %w", err)
 	}
@@ -44,11 +46,11 @@ func List(dir string) ([]string, error) {
 
 var discNumberRe = regexp.MustCompile(`\d+`)
 
-// OrganizeArtist finds all directories in mediaDir matching "<artist> - <album>"
-// and hard-links their contents into jellyfinMusicDir/<artist>/<album>/.
+// OrganizeArtist finds all directories in the media dir matching "<artist> - <album>"
+// and hard-links their contents into JellyfinMusic/<artist>/<album>/.
 // Multi-disc albums (subdirectories instead of files) are placed under Disc <N>/.
-func OrganizeArtist(mediaDir, jellyfinMusicDir, artist string) ([]string, error) {
-	entries, err := os.ReadDir(mediaDir)
+func OrganizeArtist(dirs config.Directories, artist string) ([]string, error) {
+	entries, err := os.ReadDir(dirs.Media)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read media dir: %w", err)
 	}
@@ -64,14 +66,14 @@ func OrganizeArtist(mediaDir, jellyfinMusicDir, artist string) ([]string, error)
 			continue
 		}
 
-		// Parse album name from "<Artist> - <Album>"
+		// Parse album name: everything after "<artist> - "
 		album := e.Name()[len(prefix):]
 		if album == "" {
 			continue
 		}
 
-		srcDir := filepath.Join(mediaDir, e.Name())
-		result, err := organizeAlbum(srcDir, jellyfinMusicDir, artist, album)
+		srcDir := filepath.Join(dirs.Media, e.Name())
+		result, err := organizeAlbum(dirs, artist, album, srcDir)
 		if err != nil {
 			return organized, fmt.Errorf("failed to organize %q: %w", e.Name(), err)
 		}
@@ -85,13 +87,12 @@ func OrganizeArtist(mediaDir, jellyfinMusicDir, artist string) ([]string, error)
 	return organized, nil
 }
 
-func organizeAlbum(srcDir, jellyfinMusicDir, artist, album string) ([]string, error) {
+func organizeAlbum(dirs config.Directories, artist, album, srcDir string) ([]string, error) {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine if this is a multi-disc album (contains only directories)
 	hasFiles := false
 	hasDirs := false
 	for _, e := range entries {
@@ -102,18 +103,18 @@ func organizeAlbum(srcDir, jellyfinMusicDir, artist, album string) ([]string, er
 		}
 	}
 
-	destBase := filepath.Join(jellyfinMusicDir, artist, album)
+	destBase := filepath.Join(dirs.JellyfinMusic, artist, album)
 	var linked []string
 
 	if hasFiles && !hasDirs {
-		// Single disc: link files directly
+		// Single disc: link files directly into the album dir
 		result, err := hardlinkFiles(srcDir, destBase, entries)
 		if err != nil {
 			return nil, err
 		}
 		linked = append(linked, result...)
 	} else if hasDirs && !hasFiles {
-		// Multi-disc: iterate subdirectories
+		// Multi-disc: each subdir is a disc
 		for _, e := range entries {
 			if !e.IsDir() {
 				continue
@@ -137,7 +138,7 @@ func organizeAlbum(srcDir, jellyfinMusicDir, artist, album string) ([]string, er
 			linked = append(linked, result...)
 		}
 	} else {
-		// Mixed: treat files as single disc, ignore subdirectories
+		// Mixed: treat files as single disc, skip subdirectories
 		var fileEntries []os.DirEntry
 		for _, e := range entries {
 			if !e.IsDir() {
@@ -167,7 +168,6 @@ func hardlinkFiles(srcDir, destDir string, entries []os.DirEntry) ([]string, err
 		src := filepath.Join(srcDir, e.Name())
 		dst := filepath.Join(destDir, e.Name())
 
-		// Skip if destination already exists
 		if _, err := os.Stat(dst); err == nil {
 			linked = append(linked, dst+" (already exists)")
 			continue
