@@ -160,6 +160,5 @@ jellybrarian/
 ├── server/
 │   └── server.go        # HTTP route definitions
 ├── Dockerfile
-├── compose.yaml
 └── config.toml
 ```
