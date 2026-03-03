@@ -1,0 +1,4 @@
+# media-manager configuration
+
+# Directory where all media files live (downloads, rips, etc.)
+media_dir = "/mnt/hdd0/media"
