@@ -1,7 +1,0 @@
-# media-manager configuration
-
-[directories]
-media           = "/mnt/hdd0/media"
-jellyfin_music  = "/mnt/hdd0/jellyfin/music"
-jellyfin_movies = "/mnt/hdd0/jellyfin/movies"
-jellyfin_tv     = "/mnt/hdd0/jellyfin/tv"
