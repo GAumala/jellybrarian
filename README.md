@@ -129,12 +129,19 @@ Edit `config.toml` with your actual paths, then on the Pi:
 
 ```bash
 git clone <repo> && cd jellybrarian
-docker compose up -d
+docker build -t jellybrarian .
+docker run -d \
+  --name jellybrarian \
+  --restart unless-stopped \
+  --user 1000 \
+  -p 8296:8090 \
+  -v "$(pwd)/config.toml:/app/config.toml:ro" \
+  -v /mnt/hdd0:/mnt/hdd0 \
+  jellybrarian
 ```
 
-The compose file mounts `config.toml` read-only and `/mnt/hdd0` so the container
-can reach your media and Jellyfin dirs. All paths in `config.toml` should be
-absolute paths as they appear on the host (e.g. `/mnt/hdd0/media`).
+All paths in `config.toml` should be absolute paths as they appear on the host
+(e.g. `/mnt/hdd0/media`). The service is accessible at `http://raspberry.local:8296`.
 
 > **Note:** Hard links require source and destination to be on the same filesystem.
 > As long as everything under `/mnt/hdd0` is one volume, this works fine inside
