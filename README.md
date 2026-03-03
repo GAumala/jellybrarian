@@ -15,6 +15,18 @@ go build -o media-manager .
 
 That's it. Produces a single self-contained binary with no runtime dependencies.
 
+## Test
+
+```bash
+go test ./...
+```
+
+Verbose:
+
+```bash
+go test ./... -v
+```
+
 ### Cross-compile for Linux (e.g. Raspberry Pi, home server)
 
 ```bash

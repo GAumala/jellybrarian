@@ -1,4 +1,4 @@
-module github.com/gabriel/media-manager
+module media-manager
 
 go 1.25.0
 

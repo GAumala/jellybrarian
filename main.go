@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gabriel/media-manager/config"
-	"github.com/gabriel/media-manager/server"
+	"media-manager/config"
+	"media-manager/server"
 )
 
 func main() {

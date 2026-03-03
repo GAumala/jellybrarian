@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/gabriel/media-manager/config"
-	"github.com/gabriel/media-manager/media"
+	"media-manager/config"
+	"media-manager/media"
 )
 
 func New(cfg *config.Config) http.Handler {

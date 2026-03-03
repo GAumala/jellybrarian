@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gabriel/media-manager/config"
+	"media-manager/config"
 )
 
 // List returns entries in the media dir sorted by modification time ascending (oldest first).
@@ -45,6 +45,11 @@ func List(dirs config.Directories) ([]string, error) {
 }
 
 var discNumberRe = regexp.MustCompile(`\d+`)
+type albumDir struct {
+		artist  string
+		title   string
+		path    string
+}
 
 // OrganizeArtist finds all directories in the media dir matching "<artist> - <album>"
 // and hard-links their contents into JellyfinMusic/<artist>/<album>/.
@@ -67,13 +72,14 @@ func OrganizeArtist(dirs config.Directories, artist string) ([]string, error) {
 		}
 
 		// Parse album name: everything after "<artist> - "
-		album := e.Name()[len(prefix):]
-		if album == "" {
+		title := strings.TrimSpace(e.Name()[len(prefix):])
+		if title == "" {
 			continue
 		}
 
-		srcDir := filepath.Join(dirs.Media, e.Name())
-		result, err := organizeAlbum(dirs, artist, album, srcDir)
+		albumPath := filepath.Join(dirs.Media, e.Name())
+		albumDir := albumDir{artist, title, albumPath}
+		result, err := organizeAlbum(dirs, albumDir)
 		if err != nil {
 			return organized, fmt.Errorf("failed to organize %q: %w", e.Name(), err)
 		}
@@ -87,8 +93,8 @@ func OrganizeArtist(dirs config.Directories, artist string) ([]string, error) {
 	return organized, nil
 }
 
-func organizeAlbum(dirs config.Directories, artist, album, srcDir string) ([]string, error) {
-	entries, err := os.ReadDir(srcDir)
+func organizeAlbum(dirs config.Directories, album albumDir) ([]string, error) {
+	entries, err := os.ReadDir(album.path)
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +109,12 @@ func organizeAlbum(dirs config.Directories, artist, album, srcDir string) ([]str
 		}
 	}
 
-	destBase := filepath.Join(dirs.JellyfinMusic, artist, album)
+	destBase := filepath.Join(dirs.JellyfinMusic, album.artist, album.title)
 	var linked []string
 
 	if hasFiles && !hasDirs {
 		// Single disc: link files directly into the album dir
-		result, err := hardlinkFiles(srcDir, destBase, entries)
+		result, err := hardlinkFiles(album.path, destBase, entries)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +130,7 @@ func organizeAlbum(dirs config.Directories, artist, album, srcDir string) ([]str
 				return linked, fmt.Errorf("could not parse disc number from %q: %w", e.Name(), err)
 			}
 
-			discDir := filepath.Join(srcDir, e.Name())
+			discDir := filepath.Join(album.path, e.Name())
 			discEntries, err := os.ReadDir(discDir)
 			if err != nil {
 				return linked, err
@@ -145,7 +151,7 @@ func organizeAlbum(dirs config.Directories, artist, album, srcDir string) ([]str
 				fileEntries = append(fileEntries, e)
 			}
 		}
-		result, err := hardlinkFiles(srcDir, destBase, fileEntries)
+		result, err := hardlinkFiles(album.path, destBase, fileEntries)
 		if err != nil {
 			return nil, err
 		}
