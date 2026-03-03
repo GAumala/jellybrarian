@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"media-manager/config"
-	"media-manager/media"
+	"jellybrarian/config"
+	"jellybrarian/media"
 )
 
 func New(cfg *config.Config) http.Handler {

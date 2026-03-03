@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"media-manager/config"
+	"jellybrarian/config"
 )
 
 // List returns entries in the media dir sorted by modification time ascending (oldest first).

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"media-manager/config"
+	"jellybrarian/config"
 )
 
 // testDirs creates a temporary directory structure and returns a config.Directories

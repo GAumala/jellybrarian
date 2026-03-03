@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"media-manager/config"
-	"media-manager/server"
+	"jellybrarian/config"
+	"jellybrarian/server"
 )
 
 func main() {

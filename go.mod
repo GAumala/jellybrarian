@@ -1,4 +1,4 @@
-module media-manager
+module jellybrarian
 
 go 1.25.0
 

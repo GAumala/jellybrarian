@@ -1,4 +1,4 @@
-# media-manager
+# jellybrarian
 
 HTTP server for managing media files and organizing them into Jellyfin library directories via hard links.
 
@@ -10,7 +10,7 @@ HTTP server for managing media files and organizing them into Jellyfin library d
 ## Build
 
 ```bash
-go build -o media-manager .
+go build -o jellybrarian .
 ```
 
 That's it. Produces a single self-contained binary with no runtime dependencies.
@@ -31,10 +31,10 @@ go test ./... -v
 
 ```bash
 # 64-bit ARM (Raspberry Pi 4)
-GOOS=linux GOARCH=arm64 go build -o media-manager .
+GOOS=linux GOARCH=arm64 go build -o jellybrarian .
 
 # 64-bit x86
-GOOS=linux GOARCH=amd64 go build -o media-manager .
+GOOS=linux GOARCH=amd64 go build -o jellybrarian .
 ```
 
 ## Configuration
@@ -52,7 +52,7 @@ jellyfin_tv     = "/mnt/hdd0/jellyfin/tv"
 ## Run
 
 ```bash
-./media-manager
+./jellybrarian
 ```
 
 Flags:
@@ -63,7 +63,7 @@ Flags:
 | `-addr` | `:8090` | Listen address |
 
 ```bash
-./media-manager -config /etc/media-manager/config.toml -addr :8090
+./jellybrarian -config /etc/jellybrarian/config.toml -addr :8090
 ```
 
 ## API
@@ -123,16 +123,36 @@ Response:
 
 Files that already exist at the destination are skipped (noted in the response).
 
+## Deploy with Docker (Raspberry Pi)
+
+Edit `config.toml` with your actual paths, then on the Pi:
+
+```bash
+git clone <repo> && cd jellybrarian
+docker compose up -d
+```
+
+The compose file mounts `config.toml` read-only and `/mnt/hdd0` so the container
+can reach your media and Jellyfin dirs. All paths in `config.toml` should be
+absolute paths as they appear on the host (e.g. `/mnt/hdd0/media`).
+
+> **Note:** Hard links require source and destination to be on the same filesystem.
+> As long as everything under `/mnt/hdd0` is one volume, this works fine inside
+> the container since the whole mount is shared.
+
 ## Project Structure
 
 ```
-media-manager/
-├── main.go          # entry point, CLI flags, starts server
+jellybrarian/
+├── main.go              # entry point, CLI flags, starts server
 ├── config/
-│   └── config.go    # TOML loading and validation
+│   └── config.go        # TOML loading and validation
 ├── media/
-│   └── media.go     # media listing and hard-link organization logic
+│   └── media.go         # media listing and hard-link organization logic
+│   └── media_test.go    # tests
 ├── server/
-│   └── server.go    # HTTP route definitions
-└── config.toml      # configuration file
+│   └── server.go        # HTTP route definitions
+├── Dockerfile
+├── compose.yaml
+└── config.toml
 ```
