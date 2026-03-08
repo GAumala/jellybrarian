@@ -249,15 +249,40 @@ func TestFindVideoFiles(t *testing.T) {
 	}
 }
 
-func TestPublishTVSeason(t *testing.T) {
+func TestFindVideoFiles_SingleFile(t *testing.T) {
+	dirs := testDirs(t)
+	singleMkv := filepath.Join(dirs.Media, "movie.mkv")
+	createFile(t, dirs.Media, "movie.mkv", "content")
+
+	videos, err := FindVideoFiles(singleMkv)
+	if err != nil {
+		t.Fatalf("FindVideoFiles: %v", err)
+	}
+	if len(videos) != 1 || videos[0] != singleMkv {
+		t.Fatalf("expected single path %q, got %v", singleMkv, videos)
+	}
+
+	// Non-video file returns empty slice
+	txtPath := filepath.Join(dirs.Media, "readme.txt")
+	createFile(t, dirs.Media, "readme.txt", "text")
+	videos2, err := FindVideoFiles(txtPath)
+	if err != nil {
+		t.Fatalf("FindVideoFiles(txt): %v", err)
+	}
+	if len(videos2) != 0 {
+		t.Fatalf("expected no videos for .txt file, got %v", videos2)
+	}
+}
+
+func TestAddTVSeason(t *testing.T) {
 	dirs := testDirs(t)
 	showDir := filepath.Join(dirs.Media, "Breaking Bad")
 	createFile(t, showDir, "Breaking.Bad.S01E01.Pilot.720p.WEB-DL.x264-GROUP.mkv", "pilot")
 	createFile(t, showDir, "Breaking.Bad.S01E02.Cats.In.The.Bag.720p.mkv", "ep2")
 
-	linked, err := PublishTVSeason(dirs, "Breaking Bad", "Breaking Bad (2008)")
+	linked, err := AddTVSeason(dirs, "Breaking Bad", "Breaking Bad (2008)")
 	if err != nil {
-		t.Fatalf("PublishTVSeason: %v", err)
+		t.Fatalf("AddTVSeason: %v", err)
 	}
 	if len(linked) != 2 {
 		t.Fatalf("expected 2 linked files, got %d: %v", len(linked), linked)
@@ -292,4 +317,74 @@ func TestPublishTVSeason(t *testing.T) {
 	if !os.SameFile(srcInfo2, dstInfo2) {
 		t.Error("expected source and destination S01E02 to be hard links (same inode)")
 	}
+}
+
+func TestAddMovie_SingleFile(t *testing.T) {
+	dirs := testDirs(t)
+	createFile(t, dirs.Media, "Inception.2010.1080p.mkv", "movie-content")
+
+	linked, err := AddMovie(dirs, "Inception.2010.1080p.mkv", "Inception (2010)")
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	if len(linked) != 1 {
+		t.Fatalf("expected 1 linked file, got %d: %v", len(linked), linked)
+	}
+
+	destPath := filepath.Join(dirs.JellyfinMovies, "Inception (2010)", "Inception (2010).mkv")
+	if linked[0] != destPath {
+		t.Errorf("expected %q, got %q", destPath, linked[0])
+	}
+	info, err := os.Stat(destPath)
+	if err != nil {
+		t.Fatalf("destination file missing: %v", err)
+	}
+	if info.IsDir() {
+		t.Error("expected destination to be a file")
+	}
+	srcPath := filepath.Join(dirs.Media, "Inception.2010.1080p.mkv")
+	srcInfo, _ := os.Stat(srcPath)
+	if !os.SameFile(srcInfo, info) {
+		t.Error("expected source and destination to be hard links (same inode)")
+	}
+}
+
+func TestAddMovie_MultipleParts(t *testing.T) {
+	dirs := testDirs(t)
+	movieDir := filepath.Join(dirs.Media, "Lord of the Rings")
+	createFile(t, movieDir, "part1.mkv", "part1")
+	createFile(t, movieDir, "part2.mkv", "part2")
+
+	linked, err := AddMovie(dirs, "Lord of the Rings", "The Lord of the Rings (2001)")
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	if len(linked) != 2 {
+		t.Fatalf("expected 2 linked files, got %d: %v", len(linked), linked)
+	}
+
+	base := filepath.Join(dirs.JellyfinMovies, "The Lord of the Rings (2001)")
+	for i, name := range []string{"The Lord of the Rings (2001)-part-1.mkv", "The Lord of the Rings (2001)-part-2.mkv"} {
+		destPath := filepath.Join(base, name)
+		if linked[i] != destPath {
+			t.Errorf("linked[%d] = %q, want %q", i, linked[i], destPath)
+		}
+		if _, err := os.Stat(destPath); err != nil {
+			t.Errorf("file %s missing: %v", destPath, err)
+		}
+	}
+	src1 := filepath.Join(movieDir, "part1.mkv")
+	dst1 := filepath.Join(base, "The Lord of the Rings (2001)-part-1.mkv")
+	if !os.SameFile(mustStat(t, src1), mustStat(t, dst1)) {
+		t.Error("part1: expected hard link")
+	}
+}
+
+func mustStat(t *testing.T, path string) os.FileInfo {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %q: %v", path, err)
+	}
+	return info
 }

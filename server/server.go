@@ -47,20 +47,20 @@ func New(cfg *config.Config) http.Handler {
 		})
 	})
 
-	mux.HandleFunc("PUT /media/tv/publish", func(w http.ResponseWriter, r *http.Request) {
-		directory := r.URL.Query().Get("directory")
-		showName := r.URL.Query().Get("show-name")
-		
-		if directory == "" {
-			http.Error(w, "directory query parameter is required", http.StatusBadRequest)
+	mux.HandleFunc("PUT /media/tv/add", func(w http.ResponseWriter, r *http.Request) {
+		mediaPath := r.URL.Query().Get("media-path")
+		title := r.URL.Query().Get("title")
+
+		if mediaPath == "" {
+			http.Error(w, "media-path query parameter is required", http.StatusBadRequest)
 			return
 		}
-		if showName == "" {
-			http.Error(w, "show-name query parameter is required", http.StatusBadRequest)
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
 			return
 		}
 
-		linked, err := media.PublishTVSeason(cfg.Directories, directory, showName)
+		linked, err := media.AddTVSeason(cfg.Directories, mediaPath, title)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -68,9 +68,36 @@ func New(cfg *config.Config) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"directory": directory,
-			"show_name": showName,
-			"linked": linked,
+			"media_path": mediaPath,
+			"title":      title,
+			"linked":     linked,
+		})
+	})
+
+	mux.HandleFunc("PUT /media/movies/add", func(w http.ResponseWriter, r *http.Request) {
+		mediaPath := r.URL.Query().Get("media-path")
+		title := r.URL.Query().Get("title")
+
+		if mediaPath == "" {
+			http.Error(w, "media-path query parameter is required", http.StatusBadRequest)
+			return
+		}
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		linked, err := media.AddMovie(cfg.Directories, mediaPath, title)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"media_path": mediaPath,
+			"title":      title,
+			"linked":     linked,
 		})
 	})
 

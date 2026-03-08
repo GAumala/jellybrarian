@@ -123,6 +123,70 @@ Response:
 
 Files that already exist at the destination are skipped (noted in the response).
 
+---
+
+### `PUT /media/tv/add`
+
+Finds video files at the given path (file or directory under the media root), parses
+season/episode from filenames, and hard-links them into the Jellyfin TV library as
+`{title}/Season N/{title} - S01E01.ext`.
+
+**Query parameters:**
+
+| Parameter   | Required | Description                                      |
+|------------|----------|--------------------------------------------------|
+| `media-path` | yes     | Path under media dir (e.g. `Breaking Bad` or `Show/Season 1`) |
+| `title`      | yes     | Jellyfin show title (e.g. `Breaking Bad (2008)`) |
+
+```bash
+curl -X PUT "http://localhost:8090/media/tv/add?media-path=Breaking%20Bad&title=Breaking%20Bad%20(2008)"
+```
+
+Response:
+```json
+{
+  "media_path": "Breaking Bad",
+  "title": "Breaking Bad (2008)",
+  "linked": ["/mnt/hdd0/jellyfin/tv/Breaking Bad (2008)/Season 1/Breaking Bad (2008) - S01E01.mkv", "..."]
+}
+```
+
+Files that cannot be parsed for season/episode are skipped. Existing destination files are skipped (noted in the response).
+
+---
+
+### `PUT /media/movies/add`
+
+Finds video file(s) at the given path (single file or directory under the media root)
+and hard-links them into the Jellyfin movies library.
+
+- **Single file:** `{title}/{title}.ext`
+- **Multiple files:** `{title}/{title}-part-1.ext`, `{title}-part-2.ext`, ...
+
+**Query parameters:**
+
+| Parameter   | Required | Description                                      |
+|------------|----------|--------------------------------------------------|
+| `media-path` | yes     | Path under media dir (file or directory, e.g. `Inception.2010.mkv` or `Lord of the Rings`) |
+| `title`      | yes     | Jellyfin movie title (e.g. `Inception (2010)`)   |
+
+```bash
+curl -X PUT "http://localhost:8090/media/movies/add?media-path=Inception.2010.mkv&title=Inception%20(2010)"
+```
+
+Response:
+```json
+{
+  "media_path": "Inception.2010.mkv",
+  "title": "Inception (2010)",
+  "linked": ["/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).mkv"]
+}
+```
+
+Existing destination files are skipped (noted in the response).
+
+---
+
 ## Deploy with Docker (Raspberry Pi)
 
 Edit `config.toml` with your actual paths, then on the Pi:
