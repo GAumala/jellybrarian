@@ -44,7 +44,7 @@ func createFile(t *testing.T, dir, name, content string) {
 func TestList_Empty(t *testing.T) {
 	dirs := testDirs(t)
 
-	names, err := List(dirs)
+	names, err := List(dirs, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestList_ReturnsEntries(t *testing.T) {
 	os.Mkdir(filepath.Join(dirs.Media, "Artist - Album"), 0755)
 	os.WriteFile(filepath.Join(dirs.Media, "random.txt"), []byte("hi"), 0644)
 
-	names, err := List(dirs)
+	names, err := List(dirs, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

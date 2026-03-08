@@ -12,7 +12,13 @@ func New(cfg *config.Config) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /media/list", func(w http.ResponseWriter, r *http.Request) {
-		names, err := media.List(cfg.Directories)
+		limit, err := queryInt(r, "limit", 0)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		names, err := media.List(cfg.Directories, limit)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

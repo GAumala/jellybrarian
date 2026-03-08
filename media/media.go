@@ -13,7 +13,8 @@ import (
 )
 
 // List returns entries in the media dir sorted by modification time ascending (oldest first).
-func List(dirs config.Directories) ([]string, error) {
+// If limit > 0, only the most recent limit entries are returned.
+func List(dirs config.Directories, limit int) ([]string, error) {
 	entries, err := os.ReadDir(dirs.Media)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dir: %w", err)
@@ -41,6 +42,11 @@ func List(dirs config.Directories) ([]string, error) {
 	for i, item := range items {
 		names[i] = item.name
 	}
+
+	if limit > 0 && limit < len(names) {
+		names = names[len(names)-limit:]
+	}
+
 	return names, nil
 }
 
