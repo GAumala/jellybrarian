@@ -47,5 +47,32 @@ func New(cfg *config.Config) http.Handler {
 		})
 	})
 
+	mux.HandleFunc("PUT /media/tv/publish", func(w http.ResponseWriter, r *http.Request) {
+		directory := r.URL.Query().Get("directory")
+		showName := r.URL.Query().Get("show-name")
+		
+		if directory == "" {
+			http.Error(w, "directory query parameter is required", http.StatusBadRequest)
+			return
+		}
+		if showName == "" {
+			http.Error(w, "show-name query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		linked, err := media.PublishTVSeason(cfg.Directories, directory, showName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"directory": directory,
+			"show_name": showName,
+			"linked": linked,
+		})
+	})
+
 	return mux
 }
