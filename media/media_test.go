@@ -221,3 +221,75 @@ func TestOrganizeArtist_NoMatch(t *testing.T) {
 		t.Fatal("expected error for no matching directories, got nil")
 	}
 }
+
+func TestFindVideoFiles(t *testing.T) {
+	dirs := testDirs(t)
+	showDir := filepath.Join(dirs.Media, "Breaking Bad")
+	createFile(t, showDir, "Breaking.Bad.S01E01.Pilot.720p.WEB-DL.x264-GROUP.mkv", "video1")
+	createFile(t, showDir, "other.txt", "ignore")
+	createFile(t, showDir, "episode.mp4", "video2")
+	subDir := filepath.Join(showDir, "sub")
+	createFile(t, subDir, "nested.mkv", "video3")
+
+	videos, err := FindVideoFiles(showDir)
+	if err != nil {
+		t.Fatalf("FindVideoFiles: %v", err)
+	}
+	if len(videos) != 3 {
+		t.Fatalf("expected 3 video files, got %d: %v", len(videos), videos)
+	}
+	names := make(map[string]bool)
+	for _, p := range videos {
+		names[filepath.Base(p)] = true
+	}
+	for _, want := range []string{"Breaking.Bad.S01E01.Pilot.720p.WEB-DL.x264-GROUP.mkv", "episode.mp4", "nested.mkv"} {
+		if !names[want] {
+			t.Errorf("expected video %q in result", want)
+		}
+	}
+}
+
+func TestPublishTVSeason(t *testing.T) {
+	dirs := testDirs(t)
+	showDir := filepath.Join(dirs.Media, "Breaking Bad")
+	createFile(t, showDir, "Breaking.Bad.S01E01.Pilot.720p.WEB-DL.x264-GROUP.mkv", "pilot")
+	createFile(t, showDir, "Breaking.Bad.S01E02.Cats.In.The.Bag.720p.mkv", "ep2")
+
+	linked, err := PublishTVSeason(dirs, "Breaking Bad", "Breaking Bad (2008)")
+	if err != nil {
+		t.Fatalf("PublishTVSeason: %v", err)
+	}
+	if len(linked) != 2 {
+		t.Fatalf("expected 2 linked files, got %d: %v", len(linked), linked)
+	}
+
+	destBase := filepath.Join(dirs.JellyfinTV, "Breaking Bad (2008)", "Season 1")
+	for _, name := range []string{"Breaking Bad (2008) - S01E01.mkv", "Breaking Bad (2008) - S01E02.mkv"} {
+		destPath := filepath.Join(destBase, name)
+		info, err := os.Stat(destPath)
+		if err != nil {
+			t.Errorf("expected file %s to exist: %v", destPath, err)
+			continue
+		}
+		if info.IsDir() {
+			t.Errorf("expected %s to be a file, not a directory", destPath)
+		}
+	}
+
+	// Verify hardlinks (same inode as source)
+	src1 := filepath.Join(showDir, "Breaking.Bad.S01E01.Pilot.720p.WEB-DL.x264-GROUP.mkv")
+	dst1 := filepath.Join(destBase, "Breaking Bad (2008) - S01E01.mkv")
+	srcInfo, _ := os.Stat(src1)
+	dstInfo, _ := os.Stat(dst1)
+	if !os.SameFile(srcInfo, dstInfo) {
+		t.Error("expected source and destination S01E01 to be hard links (same inode)")
+	}
+
+	src2 := filepath.Join(showDir, "Breaking.Bad.S01E02.Cats.In.The.Bag.720p.mkv")
+	dst2 := filepath.Join(destBase, "Breaking Bad (2008) - S01E02.mkv")
+	srcInfo2, _ := os.Stat(src2)
+	dstInfo2, _ := os.Stat(dst2)
+	if !os.SameFile(srcInfo2, dstInfo2) {
+		t.Error("expected source and destination S01E02 to be hard links (same inode)")
+	}
+}

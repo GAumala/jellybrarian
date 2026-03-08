@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"jellybrarian/config"
@@ -50,7 +48,6 @@ func List(dirs config.Directories, limit int) ([]string, error) {
 	return names, nil
 }
 
-var discNumberRe = regexp.MustCompile(`\d+`)
 type albumDir struct {
 		artist  string
 		title   string
@@ -194,10 +191,64 @@ func hardlinkFiles(srcDir, destDir string, entries []os.DirEntry) ([]string, err
 	return linked, nil
 }
 
-func parseDiscNumber(name string) (int, error) {
-	match := discNumberRe.FindString(name)
-	if match == "" {
-		return 0, fmt.Errorf("no number found in %q", name)
+// FindVideoFiles recursively scans dir for .mp4 and .mkv files and returns their full paths.
+func FindVideoFiles(dir string) ([]string, error) {
+	var videos []string
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(d.Name()))
+		if ext == ".mp4" || ext == ".mkv" {
+			videos = append(videos, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scanning %q: %w", dir, err)
 	}
-	return strconv.Atoi(match)
+	return videos, nil
+}
+
+// PublishTVSeason finds all video files in the given directory (a subdir of dirs.Media),
+// parses season/episode from each filename, and hardlinks them into dirs.JellyfinTV
+// as {showName}/Season N/{showName} - S01E01.ext so Jellyfin can find them.
+// Files that cannot be parsed for episode info are skipped.
+func PublishTVSeason(dirs config.Directories, directory string, showName string) ([]string, error) {
+	srcDir := filepath.Join(dirs.Media, directory)
+	videos, err := FindVideoFiles(srcDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var linked []string
+	for _, srcPath := range videos {
+		base := filepath.Base(srcPath)
+		info := GetSeasonEpisode(base, false)
+		if info == nil {
+			continue
+		}
+		ext := filepath.Ext(srcPath)
+		seasonDir := filepath.Join(dirs.JellyfinTV, showName, fmt.Sprintf("Season %d", info.Season))
+		destPath := filepath.Join(seasonDir, fmt.Sprintf("%s - %s%s", showName, info.FormatCode(), ext))
+
+		if err := os.MkdirAll(seasonDir, 0755); err != nil {
+			return linked, fmt.Errorf("failed to create dir %q: %w", seasonDir, err)
+		}
+
+		if _, err := os.Stat(destPath); err == nil {
+			linked = append(linked, destPath+" (already exists)")
+			continue
+		}
+
+		if err := os.Link(srcPath, destPath); err != nil {
+			return linked, fmt.Errorf("failed to link %q -> %q: %w", srcPath, destPath, err)
+		}
+		linked = append(linked, destPath)
+	}
+
+	return linked, nil
 }
