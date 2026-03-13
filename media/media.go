@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"jellybrarian/config"
+	"jellybrarian/text"
 )
 
 // List returns entries in the media dir sorted by modification time ascending (oldest first).
@@ -46,6 +47,71 @@ func List(dirs config.Directories, limit int) ([]string, error) {
 	}
 
 	return names, nil
+}
+
+// listJellyfinDirNames returns the names of immediate subdirectories under path, sorted alphabetically.
+func listJellyfinDirNames(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read dir %q: %w", path, err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// filterTitlesByQuery returns titles that match all space-separated keywords in q.
+// Matching is case-insensitive and accent-insensitive. If q is empty, all titles are returned.
+func filterTitlesByQuery(titles []string, q string) []string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return titles
+	}
+	normQuery := text.NormalizeForSearch(q)
+	tokens := strings.Fields(normQuery)
+	if len(tokens) == 0 {
+		return titles
+	}
+	var out []string
+	for _, title := range titles {
+		normTitle := text.NormalizeForSearch(title)
+		allMatch := true
+		for _, tok := range tokens {
+			if !strings.Contains(normTitle, tok) {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			out = append(out, title)
+		}
+	}
+	return out
+}
+
+// ListTVTitles returns Jellyfin TV show titles (subdirectory names under dirs.JellyfinTV).
+// If q is non-empty, results are filtered by keyword search (case and accent insensitive).
+func ListTVTitles(dirs config.Directories, q string) ([]string, error) {
+	names, err := listJellyfinDirNames(dirs.JellyfinTV)
+	if err != nil {
+		return nil, err
+	}
+	return filterTitlesByQuery(names, q), nil
+}
+
+// ListMovieTitles returns Jellyfin movie titles (subdirectory names under dirs.JellyfinMovies).
+// If q is non-empty, results are filtered by keyword search (case and accent insensitive).
+func ListMovieTitles(dirs config.Directories, q string) ([]string, error) {
+	names, err := listJellyfinDirNames(dirs.JellyfinMovies)
+	if err != nil {
+		return nil, err
+	}
+	return filterTitlesByQuery(names, q), nil
 }
 
 type albumDir struct {

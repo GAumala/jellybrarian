@@ -27,6 +27,28 @@ func New(cfg *config.Config) http.Handler {
 		json.NewEncoder(w).Encode(names)
 	})
 
+	mux.HandleFunc("GET /media/tv/titles", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		names, err := media.ListTVTitles(cfg.Directories, q)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(names)
+	})
+
+	mux.HandleFunc("GET /media/movies/titles", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		names, err := media.ListMovieTitles(cfg.Directories, q)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(names)
+	})
+
 	mux.HandleFunc("PUT /media/artists/{artist}/organize", func(w http.ResponseWriter, r *http.Request) {
 		artist := r.PathValue("artist")
 		if artist == "" {

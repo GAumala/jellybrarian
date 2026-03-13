@@ -222,6 +222,101 @@ func TestOrganizeArtist_NoMatch(t *testing.T) {
 	}
 }
 
+func TestListTVTitles(t *testing.T) {
+	dirs := testDirs(t)
+
+	// Empty initially
+	names, err := ListTVTitles(dirs, "")
+	if err != nil {
+		t.Fatalf("ListTVTitles: %v", err)
+	}
+	if len(names) != 0 {
+		t.Fatalf("expected no titles, got %v", names)
+	}
+
+	// Create show dirs under Jellyfin TV
+	os.Mkdir(filepath.Join(dirs.JellyfinTV, "Breaking Bad (2008)"), 0755)
+	os.Mkdir(filepath.Join(dirs.JellyfinTV, "Succession"), 0755)
+	os.Mkdir(filepath.Join(dirs.JellyfinTV, "ONE PIECE (2023)"), 0755)
+
+	names, err = ListTVTitles(dirs, "")
+	if err != nil {
+		t.Fatalf("ListTVTitles: %v", err)
+	}
+	if len(names) != 3 {
+		t.Fatalf("expected 3 titles, got %d: %v", len(names), names)
+	}
+	want := []string{"Breaking Bad (2008)", "ONE PIECE (2023)", "Succession"}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("names[%d] = %q, want %q (order should be sorted)", i, names[i], w)
+		}
+	}
+}
+
+func TestListMovieTitles(t *testing.T) {
+	dirs := testDirs(t)
+
+	names, err := ListMovieTitles(dirs, "")
+	if err != nil {
+		t.Fatalf("ListMovieTitles: %v", err)
+	}
+	if len(names) != 0 {
+		t.Fatalf("expected no titles, got %v", names)
+	}
+
+	os.Mkdir(filepath.Join(dirs.JellyfinMovies, "Inception (2010)"), 0755)
+	os.Mkdir(filepath.Join(dirs.JellyfinMovies, "The Lord of the Rings (2001)"), 0755)
+
+	names, err = ListMovieTitles(dirs, "")
+	if err != nil {
+		t.Fatalf("ListMovieTitles: %v", err)
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected 2 titles, got %d: %v", len(names), names)
+	}
+}
+
+func TestFilterTitlesByQuery(t *testing.T) {
+	titles := []string{"Silicon Valley (2014)", "Succession", "ONE PIECE (2023)"}
+
+	// No filter returns all
+	got := filterTitlesByQuery(titles, "")
+	if len(got) != 3 {
+		t.Fatalf("q empty: got %v", got)
+	}
+
+	// Single keyword "one" -> ONE PIECE only
+	got = filterTitlesByQuery(titles, "one")
+	if len(got) != 1 || got[0] != "ONE PIECE (2023)" {
+		t.Errorf("q=one: got %v", got)
+	}
+
+	// Single keyword "piece"
+	got = filterTitlesByQuery(titles, "piece")
+	if len(got) != 1 || got[0] != "ONE PIECE (2023)" {
+		t.Errorf("q=piece: got %v", got)
+	}
+
+	// "one piece"
+	got = filterTitlesByQuery(titles, "one piece")
+	if len(got) != 1 || got[0] != "ONE PIECE (2023)" {
+		t.Errorf("q=one piece: got %v", got)
+	}
+
+	// Case insensitive
+	got = filterTitlesByQuery(titles, "SUCCESSION")
+	if len(got) != 1 || got[0] != "Succession" {
+		t.Errorf("q=SUCCESSION: got %v", got)
+	}
+
+	// Accent: search with ó should match o
+	got = filterTitlesByQuery([]string{"Café", "Office"}, "cafe")
+	if len(got) != 1 || got[0] != "Café" {
+		t.Errorf("accent: got %v", got)
+	}
+}
+
 func TestFindVideoFiles(t *testing.T) {
 	dirs := testDirs(t)
 	showDir := filepath.Join(dirs.Media, "Breaking Bad")

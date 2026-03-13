@@ -83,6 +83,48 @@ curl http://localhost:8090/media/list
 
 ---
 
+### `GET /media/tv/titles`
+
+Lists Jellyfin TV show titles (subdirectory names under the TV library path), sorted alphabetically.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `q`       | no       | Filter by keywords: case- and accent-insensitive. All space-separated terms must appear in the title (e.g. `one piece` matches "ONE PIECE (2023)"). |
+
+```bash
+curl http://localhost:8090/media/tv/titles
+curl "http://localhost:8090/media/tv/titles?q=one%20piece"
+```
+
+```json
+["Breaking Bad (2008)", "ONE PIECE (2023)", "Succession"]
+```
+
+---
+
+### `GET /media/movies/titles`
+
+Lists Jellyfin movie titles (subdirectory names under the movies library path), sorted alphabetically.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `q`       | no       | Filter by keywords: case- and accent-insensitive. All space-separated terms must appear in the title. |
+
+```bash
+curl http://localhost:8090/media/movies/titles
+curl "http://localhost:8090/media/movies/titles?q=inception"
+```
+
+```json
+["Inception (2010)", "The Lord of the Rings (2001)"]
+```
+
+---
+
 ### `PUT /media/artists/{artist}/organize`
 
 Scans the media directory for folders matching `<artist> - <album>` and hard-links
