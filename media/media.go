@@ -168,129 +168,67 @@ func organizeAlbum(dirs config.Directories, album albumDir) ([]string, error) {
 		return nil, err
 	}
 
-	hasFiles := false
-	hasDirs := false
+	hasDiscDirs := false
 	for _, e := range entries {
 		if e.IsDir() {
-			hasDirs = true
-		} else {
-			hasFiles = true
+			hasDiscDirs = true
+			break
 		}
 	}
 
 	destBase := filepath.Join(dirs.JellyfinMusic, album.artist, album.title)
-	var linked []string
+	links := make(map[string]string)
 
-	if hasFiles && !hasDirs {
-		// Single disc: link files directly into the album dir
-		result, err := hardlinkFiles(album.path, destBase, entries)
-		if err != nil {
-			return nil, err
-		}
-		linked = append(linked, result...)
-	} else if hasDirs && !hasFiles {
-		// Multi-disc: each subdir is a disc
+	if hasDiscDirs {
 		for _, e := range entries {
 			if !e.IsDir() {
 				continue
 			}
 			discNum, err := parseDiscNumber(e.Name())
 			if err != nil {
-				return linked, fmt.Errorf("could not parse disc number from %q: %w", e.Name(), err)
+				return nil, fmt.Errorf("could not parse disc number from %q: %w", e.Name(), err)
 			}
-
 			discDir := filepath.Join(album.path, e.Name())
 			discEntries, err := os.ReadDir(discDir)
 			if err != nil {
-				return linked, err
+				return nil, err
 			}
-
 			destDisc := filepath.Join(destBase, fmt.Sprintf("Disc %d", discNum))
-			result, err := hardlinkFiles(discDir, destDisc, discEntries)
-			if err != nil {
-				return linked, err
+			for _, de := range discEntries {
+				if !de.IsDir() {
+					links[filepath.Join(discDir, de.Name())] = filepath.Join(destDisc, de.Name())
+				}
 			}
-			linked = append(linked, result...)
 		}
 	} else {
-		// Mixed: treat files as single disc, skip subdirectories
-		var fileEntries []os.DirEntry
 		for _, e := range entries {
 			if !e.IsDir() {
-				fileEntries = append(fileEntries, e)
+				links[filepath.Join(album.path, e.Name())] = filepath.Join(destBase, e.Name())
 			}
 		}
-		result, err := hardlinkFiles(album.path, destBase, fileEntries)
-		if err != nil {
-			return nil, err
-		}
-		linked = append(linked, result...)
 	}
 
-	return linked, nil
+	return hardlinkFiles(links)
 }
 
-func hardlinkFiles(srcDir, destDir string, entries []os.DirEntry) ([]string, error) {
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create dir %q: %w", destDir, err)
-	}
-
+// hardlinkFiles creates hard links for each src -> dst pair. Creates parent dirs as needed.
+// If a destination already exists, it is removed and replaced by the new hard link.
+// On first link failure, returns the list built so far and the error.
+func hardlinkFiles(links map[string]string) ([]string, error) {
 	var linked []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	for src, dst := range links {
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return linked, fmt.Errorf("failed to create dir %q: %w", filepath.Dir(dst), err)
 		}
-		src := filepath.Join(srcDir, e.Name())
-		dst := filepath.Join(destDir, e.Name())
-
 		if _, err := os.Stat(dst); err == nil {
-			linked = append(linked, dst+" (already exists)")
-			continue
+			os.Remove(dst)
 		}
-
 		if err := os.Link(src, dst); err != nil {
 			return linked, fmt.Errorf("failed to link %q -> %q: %w", src, dst, err)
 		}
 		linked = append(linked, dst)
 	}
-
 	return linked, nil
-}
-
-// FindVideoFiles scans path for .mp4 and .mkv files. If path is a single file with
-// .mp4 or .mkv extension, returns a slice containing only that path. If path is a
-// directory, recursively walks it and returns all video file paths.
-func FindVideoFiles(path string) ([]string, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, fmt.Errorf("stat %q: %w", path, err)
-	}
-	if !info.IsDir() {
-		ext := strings.ToLower(filepath.Ext(info.Name()))
-		if ext == ".mp4" || ext == ".mkv" {
-			return []string{path}, nil
-		}
-		return nil, nil
-	}
-
-	var videos []string
-	err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(d.Name()))
-		if ext == ".mp4" || ext == ".mkv" {
-			videos = append(videos, p)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("scanning %q: %w", path, err)
-	}
-	return videos, nil
 }
 
 // AddTVSeason finds all video files at the given media-path (a file or directory under dirs.Media),
@@ -303,8 +241,7 @@ func AddTVSeason(dirs config.Directories, mediaPath string, title string) ([]str
 	if err != nil {
 		return nil, err
 	}
-
-	var linked []string
+	links := make(map[string]string)
 	for _, srcPath := range videos {
 		base := filepath.Base(srcPath)
 		info := GetSeasonEpisode(base, false)
@@ -314,30 +251,22 @@ func AddTVSeason(dirs config.Directories, mediaPath string, title string) ([]str
 		ext := filepath.Ext(srcPath)
 		seasonDir := filepath.Join(dirs.JellyfinTV, title, fmt.Sprintf("Season %d", info.Season))
 		destPath := filepath.Join(seasonDir, fmt.Sprintf("%s - %s%s", title, info.FormatCode(), ext))
-
-		if err := os.MkdirAll(seasonDir, 0755); err != nil {
-			return linked, fmt.Errorf("failed to create dir %q: %w", seasonDir, err)
-		}
-
-		if _, err := os.Stat(destPath); err == nil {
-			linked = append(linked, destPath+" (already exists)")
-			continue
-		}
-
-		if err := os.Link(srcPath, destPath); err != nil {
-			return linked, fmt.Errorf("failed to link %q -> %q: %w", srcPath, destPath, err)
-		}
-		linked = append(linked, destPath)
+		links[srcPath] = destPath
 	}
-
-	return linked, nil
+	return hardlinkFiles(links)
 }
 
 // AddMovie finds video file(s) at the given media-path (a file or directory under dirs.Media),
-// and hardlinks them into dirs.JellyfinMovies as {title}/{title}{ext} for a single
-// file, or {title}/{title}-part-1{ext}, -part-2{ext}, etc. for multiple files.
+// plus audio tracks (.XX.aac, .XX.ac3) and subtitles (.XX.srt) with 2-letter language codes,
+// and hardlinks them into dirs.JellyfinMovies. Videos: {title}/{title}{ext} or -part-N for
+// multiple. Audio/subs: {title}/{title}.{lang}.{ext} (e.g. title.es.aac, title.en.srt).
 func AddMovie(dirs config.Directories, mediaPath string, title string) ([]string, error) {
 	srcPath := filepath.Join(dirs.Media, mediaPath)
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("media path %q: %w", srcPath, err)
+	}
+
 	videos, err := FindVideoFiles(srcPath)
 	if err != nil {
 		return nil, err
@@ -347,31 +276,23 @@ func AddMovie(dirs config.Directories, mediaPath string, title string) ([]string
 	}
 
 	movieDir := filepath.Join(dirs.JellyfinMovies, title)
-	if err := os.MkdirAll(movieDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create dir %q: %w", movieDir, err)
-	}
-
-	var linked []string
+	links := make(map[string]string)
 	for i, src := range videos {
 		ext := filepath.Ext(src)
-		var base string
 		if len(videos) == 1 {
-			base = title + ext
+			links[src] = filepath.Join(movieDir, title+ext)
 		} else {
-			base = fmt.Sprintf("%s-part-%d%s", title, i+1, ext)
+			links[src] = filepath.Join(movieDir, fmt.Sprintf("%s-part-%d%s", title, i+1, ext))
 		}
-		destPath := filepath.Join(movieDir, base)
-
-		if _, err := os.Stat(destPath); err == nil {
-			linked = append(linked, destPath+" (already exists)")
-			continue
-		}
-
-		if err := os.Link(src, destPath); err != nil {
-			return linked, fmt.Errorf("failed to link %q -> %q: %w", src, destPath, err)
-		}
-		linked = append(linked, destPath)
 	}
-
-	return linked, nil
+	if info.IsDir() {
+		extras, err := findMovieExtraTracks(srcPath)
+		if err != nil {
+			return nil, fmt.Errorf("scanning for audio/subtitles: %w", err)
+		}
+		for _, t := range extras {
+			links[t.path] = filepath.Join(movieDir, fmt.Sprintf("%s.%s.%s", title, t.lang, t.ext))
+		}
+	}
+	return hardlinkFiles(links)
 }

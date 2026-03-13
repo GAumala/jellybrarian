@@ -199,7 +199,7 @@ func TestOrganizeArtist_SkipsExisting(t *testing.T) {
 		t.Fatalf("first run: unexpected error: %v", err)
 	}
 
-	// Run again — should not error, should report already exists
+	// Run again — should not error, overwrites existing with same link
 	linked, err := OrganizeArtist(dirs, "Deftones")
 	if err != nil {
 		t.Fatalf("second run: unexpected error: %v", err)
@@ -208,8 +208,8 @@ func TestOrganizeArtist_SkipsExisting(t *testing.T) {
 	if len(linked) != 1 {
 		t.Fatalf("expected 1 result, got %d: %v", len(linked), linked)
 	}
-	if filepath.Base(linked[0]) != "01 - Feiticeira.flac (already exists)" {
-		t.Errorf("expected 'already exists' note, got %q", linked[0])
+	if filepath.Base(linked[0]) != "01 - Feiticeira.flac" {
+		t.Errorf("expected destination path, got %q", linked[0])
 	}
 }
 
@@ -472,6 +472,46 @@ func TestAddMovie_MultipleParts(t *testing.T) {
 	dst1 := filepath.Join(base, "The Lord of the Rings (2001)-part-1.mkv")
 	if !os.SameFile(mustStat(t, src1), mustStat(t, dst1)) {
 		t.Error("part1: expected hard link")
+	}
+}
+
+func TestAddMovie_AudioAndSubtitles(t *testing.T) {
+	dirs := testDirs(t)
+	movieDir := filepath.Join(dirs.Media, "Dune")
+	createFile(t, movieDir, "Dune.2021.1080p.mkv", "video")
+	createFile(t, movieDir, "Dune.2021.es.aac", "spanish-audio")
+	createFile(t, movieDir, "Dune.2021.en.srt", "english-subs")
+
+	linked, err := AddMovie(dirs, "Dune", "Dune (2021)")
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	if len(linked) != 3 {
+		t.Fatalf("expected 3 linked files (video + audio + sub), got %d: %v", len(linked), linked)
+	}
+
+	base := filepath.Join(dirs.JellyfinMovies, "Dune (2021)")
+	wantNames := map[string]bool{
+		"Dune (2021).mkv": true,
+		"Dune (2021).es.aac": true,
+		"Dune (2021).en.srt": true,
+	}
+	for _, path := range linked {
+		name := filepath.Base(path)
+		if !wantNames[name] {
+			t.Errorf("unexpected linked file: %s", path)
+		}
+	}
+	// Audio and subtitle are hardlinked
+	srcAac := filepath.Join(movieDir, "Dune.2021.es.aac")
+	dstAac := filepath.Join(base, "Dune (2021).es.aac")
+	if !os.SameFile(mustStat(t, srcAac), mustStat(t, dstAac)) {
+		t.Error("expected .es.aac to be hard linked")
+	}
+	srcSrt := filepath.Join(movieDir, "Dune.2021.en.srt")
+	dstSrt := filepath.Join(base, "Dune (2021).en.srt")
+	if !os.SameFile(mustStat(t, srcSrt), mustStat(t, dstSrt)) {
+		t.Error("expected .en.srt to be hard linked")
 	}
 }
 
