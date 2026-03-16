@@ -515,6 +515,36 @@ func TestAddMovie_AudioAndSubtitles(t *testing.T) {
 	}
 }
 
+func TestAddMovie_ThreeLetterLangAndPlainSrt(t *testing.T) {
+	dirs := testDirs(t)
+	movieDir := filepath.Join(dirs.Media, "Alien")
+	createFile(t, movieDir, "Alien.1979.mkv", "video")
+	createFile(t, movieDir, "Alien.1979.eng.srt", "english-subs")
+	createFile(t, movieDir, "Alien.1979.srt", "no-lang-subs")
+	createFile(t, movieDir, "Alien.1979.spa.aac", "spanish-audio")
+
+	linked, err := AddMovie(dirs, "Alien", "Alien (1979)")
+	if err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	if len(linked) != 4 {
+		t.Fatalf("expected 4 linked files, got %d: %v", len(linked), linked)
+	}
+
+	wantNames := map[string]bool{
+		"Alien (1979).mkv": true,
+		"Alien (1979).en.srt": true,  // eng -> en
+		"Alien (1979).srt": true,     // plain .srt, no lang
+		"Alien (1979).es.aac": true,  // spa -> es
+	}
+	for _, path := range linked {
+		name := filepath.Base(path)
+		if !wantNames[name] {
+			t.Errorf("unexpected linked file: %s", path)
+		}
+	}
+}
+
 func mustStat(t *testing.T, path string) os.FileInfo {
 	t.Helper()
 	info, err := os.Stat(path)

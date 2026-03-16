@@ -44,18 +44,25 @@ func FindVideoFiles(path string) ([]string, error) {
 	return videos, nil
 }
 
-// langTrackRegex matches .XX.aac, .XX.ac3, or .XX.srt at end of filename (XX = 2-letter language code).
-var langTrackRegex = regexp.MustCompile(`\.([a-zA-Z]{2})\.(aac|ac3|srt)$`)
+// langTrackRegex matches .XX or .XXX plus .aac, .ac3, or .srt at end of filename (2 or 3-letter language code).
+var langTrackRegex = regexp.MustCompile(`\.([a-zA-Z]{2,3})\.(aac|ac3|srt)$`)
 
-// extraTrack is a language-tagged audio or subtitle file for a movie.
+// lang3to2 maps 3-letter ISO 639-2 codes to 2-letter for supported languages.
+var lang3to2 = map[string]string{
+	"spa": "es", "eng": "en", "ita": "it", "fra": "fr", "jpn": "ja",
+	"por": "pt", "rus": "ru", "zho": "zh", "kor": "ko", 
+}
+
+// extraTrack is a language-tagged audio or subtitle file for a movie. lang is empty for unnamed .srt.
 type extraTrack struct {
 	path string
 	lang string
 	ext  string // e.g. "aac", "ac3", "srt"
 }
 
-// findMovieExtraTracks scans dir for audio (.XX.aac, .XX.ac3) and subtitle (.XX.srt) files
-// with a 2-letter language code and returns them for linking.
+// findMovieExtraTracks scans dir for audio (.XX.aac, .XX.ac3) and subtitle (.XX.srt or plain .srt) files.
+// Accepts 2-letter codes and 3-letter codes (spa, eng, ita, fra, jpn) mapped to 2-letter.
+// Files ending in .srt with no language code are included as unnamed subtitle.
 func findMovieExtraTracks(dir string) ([]extraTrack, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -67,12 +74,30 @@ func findMovieExtraTracks(dir string) ([]extraTrack, error) {
 			continue
 		}
 		name := e.Name()
+		lower := strings.ToLower(name)
 		m := langTrackRegex.FindStringSubmatch(name)
 		if m != nil {
+			code := strings.ToLower(m[1])
+			var lang string
+			if len(code) == 2 {
+				lang = code
+			} else if two, ok := lang3to2[code]; ok {
+				lang = two
+			} else {
+				continue // unsupported 3-letter code
+			}
 			tracks = append(tracks, extraTrack{
 				path: filepath.Join(dir, name),
-				lang: strings.ToLower(m[1]),
+				lang: lang,
 				ext:  m[2],
+			})
+			continue
+		}
+		if strings.HasSuffix(lower, ".srt") {
+			tracks = append(tracks, extraTrack{
+				path: filepath.Join(dir, name),
+				lang: "",
+				ext:  "srt",
 			})
 		}
 	}

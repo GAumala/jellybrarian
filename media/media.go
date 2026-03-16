@@ -291,7 +291,13 @@ func AddMovie(dirs config.Directories, mediaPath string, title string) ([]string
 			return nil, fmt.Errorf("scanning for audio/subtitles: %w", err)
 		}
 		for _, t := range extras {
-			links[t.path] = filepath.Join(movieDir, fmt.Sprintf("%s.%s.%s", title, t.lang, t.ext))
+			var base string
+			if t.lang == "" {
+				base = fmt.Sprintf("%s.%s", title, t.ext)
+			} else {
+				base = fmt.Sprintf("%s.%s.%s", title, t.lang, t.ext)
+			}
+			links[t.path] = filepath.Join(movieDir, base)
 		}
 	}
 	return hardlinkFiles(links)
