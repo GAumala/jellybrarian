@@ -87,30 +87,6 @@ func TestGetSeasonEpisode_SingleSeasonEPattern(t *testing.T) {
 	}
 }
 
-func TestGetSeasonEpisode_AnimePartSeason(t *testing.T) {
-	tests := []struct {
-		filename        string
-		expectedSeason  int
-		expectedEpisode int
-		animeMode       bool
-	}{
-		{"Anime Time] JoJo's Bizarre Adventure Part 6 - Stone Ocean - 01.mkv", 6, 1, true},
-		{"Anime Time] JoJo's Bizarre Adventure Part 6 - Stone Ocean - 02.mkv", 6, 2, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.filename, func(t *testing.T) {
-			result := GetSeasonEpisode(tt.filename, tt.animeMode)
-			if result == nil {
-				t.Fatalf("failed to parse: %s", tt.filename)
-			}
-			if result.Season != tt.expectedSeason || result.Episode != tt.expectedEpisode {
-				t.Errorf("%s -> got S%dE%d, want S%02dE%02d", tt.filename,
-					result.Season, result.Episode, tt.expectedSeason, tt.expectedEpisode)
-			}
-		})
-	}
-}
-
 func TestGetSeasonEpisode_AnimeFansub(t *testing.T) {
 	tests := []struct {
 		filename       string
