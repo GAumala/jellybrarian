@@ -32,6 +32,9 @@ var (
 	patternExx = regexp.MustCompile(`(?i)[Ee](\d{1,3})`)
 	// Anime/fansub: " - 01 [" or " - 01 (" or " - 01."
 	patternAnime = regexp.MustCompile(`-\s+(\d{1,3})\s*[\[\(.]`)
+
+	// Anime: "Part 6 - ..." (JoJo-style); capture group is the part/season number.
+	patternAnimePart = regexp.MustCompile(`(?i)Part\s+(\d{1,2})\s+-\s+`)
 )
 
 // GetSeasonEpisode extracts season and episode numbers from a filename.
@@ -108,7 +111,14 @@ func matchAnime(s string) *EpisodeInfo {
 		return nil
 	}
 	episode, _ := strconv.Atoi(m[1])
-	return &EpisodeInfo{Season: 1, Episode: episode}
+
+	var season = 1
+	m = patternAnimePart.FindStringSubmatch(s)
+	if m != nil {
+		season, _ = strconv.Atoi(m[1])
+	}
+
+	return &EpisodeInfo{Season: season, Episode: episode}
 }
 
 
