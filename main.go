@@ -19,11 +19,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	d := cfg.Directories
-	log.Printf("media dir:           %s", d.Media)
-	log.Printf("jellyfin music dir:  %s", d.JellyfinMusic)
-	log.Printf("jellyfin movies dir: %s", d.JellyfinMovies)
-	log.Printf("jellyfin tv dir:     %s", d.JellyfinTV)
+	log.Printf("media dir: %s", cfg.Media)
+	log.Printf("jellyfin music:  %v", cfg.JellyfinMusic)
+	log.Printf("jellyfin movies: %v", cfg.JellyfinMovies)
+	log.Printf("jellyfin tv:     %v", cfg.JellyfinTV)
 
 	handler := server.New(cfg)
 

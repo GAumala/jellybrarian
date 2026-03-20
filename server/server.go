@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"jellybrarian/config"
-	"jellybrarian/media"
 )
 
 func New(cfg *config.Config) http.Handler {
@@ -17,8 +16,10 @@ func New(cfg *config.Config) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		// ListMedia only reads MediaDir; lib-index is not used.
+		mgr := mediaManager(cfg, "")
 
-		names, err := media.List(cfg.Directories, limit)
+		names, err := mgr.ListMedia(limit)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -28,8 +29,14 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	mux.HandleFunc("GET /media/tv/titles", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		q := r.URL.Query().Get("q")
-		names, err := media.ListTVTitles(cfg.Directories, q)
+		names, err := mgr.ListLibraryTitles(q)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -39,8 +46,14 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	mux.HandleFunc("GET /media/movies/titles", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		q := r.URL.Query().Get("q")
-		names, err := media.ListMovieTitles(cfg.Directories, q)
+		names, err := mgr.ListLibraryTitles(q)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -50,13 +63,19 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	mux.HandleFunc("PUT /media/artists/{artist}/organize", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMusic)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		artist := r.PathValue("artist")
 		if artist == "" {
 			http.Error(w, "artist is required", http.StatusBadRequest)
 			return
 		}
 
-		linked, err := media.OrganizeArtist(cfg.Directories, artist)
+		linked, err := mgr.OrganizeArtist(artist)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -70,6 +89,12 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	mux.HandleFunc("PUT /media/tv/add", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		mediaPath := r.URL.Query().Get("media-path")
 		title := r.URL.Query().Get("title")
 
@@ -82,7 +107,7 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 
-		linked, err := media.AddTVSeason(cfg.Directories, mediaPath, title)
+		linked, err := mgr.AddTVSeason(mediaPath, title)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -97,6 +122,12 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	mux.HandleFunc("PUT /media/movies/add", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		mediaPath := r.URL.Query().Get("media-path")
 		title := r.URL.Query().Get("title")
 
@@ -109,7 +140,7 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 
-		linked, err := media.AddMovie(cfg.Directories, mediaPath, title)
+		linked, err := mgr.AddMovie(mediaPath, title)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

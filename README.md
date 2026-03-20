@@ -21,13 +21,7 @@ That's it. Produces a single self-contained binary with no runtime dependencies.
 go test ./...
 ```
 
-Verbose:
-
-```bash
-go test ./... -v
-```
-
-### Cross-compile for Linux (e.g. Raspberry Pi, home server)
+### Cross-compile for Linux (e.g. Raspberry Pi)
 
 ```bash
 # 64-bit ARM (Raspberry Pi 4)
@@ -39,15 +33,43 @@ GOOS=linux GOARCH=amd64 go build -o jellybrarian .
 
 ## Configuration
 
-Copy and edit `config.toml`:
+Copy and edit `config.toml`. 
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `media` | **yes** | Root folder for downloads and staging (where new rips land). Must exist as a directory. |
+| `jellyfin_music` | no | Music library root(s). Omit if you only use movies/TV. |
+| `jellyfin_movies` | no | Movie library root(s). |
+| `jellyfin_tv` | no | TV library root(s). |
+
+Each `jellyfin_*` value may be either a **single string** or a **TOML array of strings** if you have multiple library roots for that type:
 
 ```toml
-[directories]
-media           = "/mnt/hdd0/media"       # where downloads and rips land
+media = "/mnt/hdd0/media"
+
 jellyfin_music  = "/mnt/hdd0/jellyfin/music"
-jellyfin_movies = "/mnt/hdd0/jellyfin/movies"
-jellyfin_tv     = "/mnt/hdd0/jellyfin/tv"
+jellyfin_movies = "/mnt/ssd/jellyfin/movies"
+jellyfin_tv     = ["/mnt/hdd0/jellyfin/tv", "/mnt/hdd0/jellyfin/anime"]
 ```
+
+Validation on startup:
+
+- Every configured path must exist and be a directory.
+- Empty strings are not allowed inside a `jellyfin_*` list.
+- An empty list (`jellyfin_tv = []`) or omitting a key means you are not using that library type from the API (endpoints that need that list will return an error).
+
+### Choosing a library at runtime (`lib-index`)
+
+Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, default **`0`**). It selects **which** path to use when `jellyfin_music`, `jellyfin_movies`, or `jellyfin_tv` is an array (or always `0` when there is only one path). **`GET /media/list` does not use `lib-index`** (it only lists `media`).
+
+| Endpoint | Uses `jellyfin_*` |
+|----------|-------------------|
+| `GET /media/list` | — (`lib-index` ignored) |
+| `GET /media/tv/titles` | `jellyfin_tv` |
+| `GET /media/movies/titles` | `jellyfin_movies` |
+| `PUT /media/artists/{artist}/organize` | `jellyfin_music` |
+| `PUT /media/tv/add` | `jellyfin_tv` |
+| `PUT /media/movies/add` | `jellyfin_movies` |
 
 ## Run
 
@@ -70,11 +92,19 @@ Flags:
 
 ### `GET /media/list`
 
-Lists all entries in the media directory, sorted oldest → newest (newest at the bottom).
+Lists entries in the **media** directory (`media` in config), sorted oldest → newest (newest at the bottom).
 Useful for spotting recently added files that still need to be organized into Jellyfin.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `limit`   | no       | If `> 0`, only the **most recent** `limit` entries are returned (after sorting). Default `0` means no limit. |
+| `lib-index` | —      | Ignored for this route. |
 
 ```bash
 curl http://localhost:8090/media/list
+curl "http://localhost:8090/media/list?limit=20"
 ```
 
 ```json
@@ -85,17 +115,19 @@ curl http://localhost:8090/media/list
 
 ### `GET /media/tv/titles`
 
-Lists Jellyfin TV show titles (subdirectory names under the TV library path), sorted alphabetically.
+Lists TV show titles (immediate subdirectory names under the selected **TV** library path), sorted alphabetically.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `q`       | no       | Filter by keywords: case- and accent-insensitive. All space-separated terms must appear in the title (e.g. `one piece` matches "ONE PIECE (2023)"). |
+| `lib-index` | no   | Which `jellyfin_tv` path to use (default `0`). |
 
 ```bash
 curl http://localhost:8090/media/tv/titles
 curl "http://localhost:8090/media/tv/titles?q=one%20piece"
+curl "http://localhost:8090/media/tv/titles?lib-index=1"
 ```
 
 ```json
@@ -106,13 +138,14 @@ curl "http://localhost:8090/media/tv/titles?q=one%20piece"
 
 ### `GET /media/movies/titles`
 
-Lists Jellyfin movie titles (subdirectory names under the movies library path), sorted alphabetically.
+Lists movie titles (immediate subdirectory names under the selected **movies** library path), sorted alphabetically.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `q`       | no       | Filter by keywords: case- and accent-insensitive. All space-separated terms must appear in the title. |
+| `lib-index` | no   | Which `jellyfin_movies` path to use (default `0`). |
 
 ```bash
 curl http://localhost:8090/media/movies/titles
@@ -128,15 +161,17 @@ curl "http://localhost:8090/media/movies/titles?q=inception"
 ### `PUT /media/artists/{artist}/organize`
 
 Scans the media directory for folders matching `<artist> - <album>` and hard-links
-their contents into the Jellyfin music library.
+their contents into the selected **music** Jellyfin library path.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `lib-index` | no   | Which `jellyfin_music` path to use (default `0`). |
 
 ```bash
 curl -X PUT http://localhost:8090/media/artists/Metallica/organize
-```
-
-**Naming convention in media dir:**
-```
-Artist Name - Album Title/
+curl -X PUT "http://localhost:8090/media/artists/Metallica/organize?lib-index=1"
 ```
 
 **Single-disc album** (directory contains files):
@@ -148,8 +183,8 @@ media/Metallica - Master of Puppets/  →  jellyfin/music/Metallica/Master of Pu
 The disc number is parsed from the subdirectory name (any integer found in the name).
 ```
 media/Metallica - S&M/
-  Disc 1/   →  jellyfin/music/Metallica/S&M/Disc 1/
-  Disc 2/   →  jellyfin/music/Metallica/S&M/Disc 2/
+  CD 1/   →  jellyfin/music/Metallica/S&M/Disc 1/
+  CD 2/   →  jellyfin/music/Metallica/S&M/Disc 2/
 ```
 
 Response:
@@ -163,14 +198,14 @@ Response:
 }
 ```
 
-Files that already exist at the destination are skipped (noted in the response).
+If a destination file already exists, it is removed and replaced by the new hard link.
 
 ---
 
 ### `PUT /media/tv/add`
 
 Finds video files at the given path (file or directory under the media root), parses
-season/episode from filenames, and hard-links them into the Jellyfin TV library as
+season/episode from filenames, and hard-links them into the selected **TV** Jellyfin library as
 `{title}/Season N/{title} - S01E01.ext`.
 
 **Query parameters:**
@@ -179,9 +214,11 @@ season/episode from filenames, and hard-links them into the Jellyfin TV library 
 |------------|----------|--------------------------------------------------|
 | `media-path` | yes     | Path under media dir (e.g. `Breaking Bad` or `Show/Season 1`) |
 | `title`      | yes     | Jellyfin show title (e.g. `Breaking Bad (2008)`) |
+| `lib-index` | no   | Which `jellyfin_tv` path to use (default `0`). |
 
 ```bash
 curl -X PUT "http://localhost:8090/media/tv/add?media-path=Breaking%20Bad&title=Breaking%20Bad%20(2008)"
+curl -X PUT "http://localhost:8090/media/tv/add?media-path=Breaking%20Bad&title=Breaking%20Bad%20(2008)&lib-index=1"
 ```
 
 Response:
@@ -193,14 +230,14 @@ Response:
 }
 ```
 
-Files that cannot be parsed for season/episode are skipped. Existing destination files are skipped (noted in the response).
+Files that cannot be parsed for season/episode are skipped. Existing destination files are replaced when linking.
 
 ---
 
 ### `PUT /media/movies/add`
 
 Finds video file(s) at the given path (single file or directory under the media root)
-and hard-links them into the Jellyfin movies library.
+and hard-links them into the selected **movies** Jellyfin library.
 
 - **Single file:** `{title}/{title}.ext`
 - **Multiple files:** `{title}/{title}-part-1.ext`, `{title}-part-2.ext`, ...
@@ -211,6 +248,7 @@ and hard-links them into the Jellyfin movies library.
 |------------|----------|--------------------------------------------------|
 | `media-path` | yes     | Path under media dir (file or directory, e.g. `Inception.2010.mkv` or `Lord of the Rings`) |
 | `title`      | yes     | Jellyfin movie title (e.g. `Inception (2010)`)   |
+| `lib-index` | no   | Which `jellyfin_movies` path to use (default `0`). |
 
 ```bash
 curl -X PUT "http://localhost:8090/media/movies/add?media-path=Inception.2010.mkv&title=Inception%20(2010)"
@@ -225,11 +263,11 @@ Response:
 }
 ```
 
-Existing destination files are skipped (noted in the response).
+Existing destination files are replaced when linking.
 
 ---
 
-## Deploy with Docker (Raspberry Pi)
+## Deploy with Docker
 
 Edit `config.toml` with your actual paths, then on the Pi:
 
@@ -261,10 +299,12 @@ jellybrarian/
 ├── config/
 │   └── config.go        # TOML loading and validation
 ├── media/
-│   └── media.go         # media listing and hard-link organization logic
+│   ├── media.go         # MediaManager: listing and hard-link organization
 │   └── media_test.go    # tests
 ├── server/
-│   └── server.go        # HTTP route definitions
+│   ├── server.go        # HTTP route definitions
+│   ├── library.go       # LibraryKind, createMediaManager, lib-index resolution
+│   └── input.go         # query parameter helpers
 ├── Dockerfile
 └── config.toml
 ```

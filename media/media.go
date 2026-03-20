@@ -7,14 +7,24 @@ import (
 	"sort"
 	"strings"
 
-	"jellybrarian/config"
 	"jellybrarian/text"
 )
 
-// List returns entries in the media dir sorted by modification time ascending (oldest first).
+type albumInfo struct {
+	artist string
+	title  string
+	path   string
+}
+
+type MediaManager struct {
+	MediaDir   string
+	LibraryDir string
+}
+
+// ListMedia returns entries in the media dir sorted by modification time ascending (oldest first).
 // If limit > 0, only the most recent limit entries are returned.
-func List(dirs config.Directories, limit int) ([]string, error) {
-	entries, err := os.ReadDir(dirs.Media)
+func (mgr MediaManager) ListMedia(limit int) ([]string, error) {
+	entries, err := os.ReadDir(mgr.MediaDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dir: %w", err)
 	}
@@ -94,37 +104,21 @@ func filterTitlesByQuery(titles []string, q string) []string {
 	return out
 }
 
-// ListTVTitles returns Jellyfin TV show titles (subdirectory names under dirs.JellyfinTV).
+// ListLibraryTitles returns subdirectory names under the selected library dir (movies or TV).
 // If q is non-empty, results are filtered by keyword search (case and accent insensitive).
-func ListTVTitles(dirs config.Directories, q string) ([]string, error) {
-	names, err := listJellyfinDirNames(dirs.JellyfinTV)
+func (mgr MediaManager) ListLibraryTitles(q string) ([]string, error) {
+	names, err := listJellyfinDirNames(mgr.LibraryDir)
 	if err != nil {
 		return nil, err
 	}
 	return filterTitlesByQuery(names, q), nil
-}
-
-// ListMovieTitles returns Jellyfin movie titles (subdirectory names under dirs.JellyfinMovies).
-// If q is non-empty, results are filtered by keyword search (case and accent insensitive).
-func ListMovieTitles(dirs config.Directories, q string) ([]string, error) {
-	names, err := listJellyfinDirNames(dirs.JellyfinMovies)
-	if err != nil {
-		return nil, err
-	}
-	return filterTitlesByQuery(names, q), nil
-}
-
-type albumDir struct {
-		artist  string
-		title   string
-		path    string
 }
 
 // OrganizeArtist finds all directories in the media dir matching "<artist> - <album>"
-// and hard-links their contents into JellyfinMusic/<artist>/<album>/.
+// and hard-links their contents into LibraryDir/<artist>/<album>/.
 // Multi-disc albums (subdirectories instead of files) are placed under Disc <N>/.
-func OrganizeArtist(dirs config.Directories, artist string) ([]string, error) {
-	entries, err := os.ReadDir(dirs.Media)
+func (mgr MediaManager) OrganizeArtist(artist string) ([]string, error) {
+	entries, err := os.ReadDir(mgr.MediaDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read media dir: %w", err)
 	}
@@ -146,9 +140,9 @@ func OrganizeArtist(dirs config.Directories, artist string) ([]string, error) {
 			continue
 		}
 
-		albumPath := filepath.Join(dirs.Media, e.Name())
-		albumDir := albumDir{artist, title, albumPath}
-		result, err := organizeAlbum(dirs, albumDir)
+		albumPath := filepath.Join(mgr.MediaDir, e.Name())
+		info := albumInfo{artist, title, albumPath}
+		result, err := mgr.organizeAlbum(info)
 		if err != nil {
 			return organized, fmt.Errorf("failed to organize %q: %w", e.Name(), err)
 		}
@@ -162,7 +156,7 @@ func OrganizeArtist(dirs config.Directories, artist string) ([]string, error) {
 	return organized, nil
 }
 
-func organizeAlbum(dirs config.Directories, album albumDir) ([]string, error) {
+func (mgr MediaManager) organizeAlbum(album albumInfo) ([]string, error) {
 	entries, err := os.ReadDir(album.path)
 	if err != nil {
 		return nil, err
@@ -176,7 +170,7 @@ func organizeAlbum(dirs config.Directories, album albumDir) ([]string, error) {
 		}
 	}
 
-	destBase := filepath.Join(dirs.JellyfinMusic, album.artist, album.title)
+	destBase := filepath.Join(mgr.LibraryDir, album.artist, album.title)
 	links := make(map[string]string)
 
 	if hasDiscDirs {
@@ -231,12 +225,12 @@ func hardlinkFiles(links map[string]string) ([]string, error) {
 	return linked, nil
 }
 
-// AddTVSeason finds all video files at the given media-path (a file or directory under dirs.Media),
-// parses season/episode from each filename, and hardlinks them into dirs.JellyfinTV
+// AddTVSeason finds all video files at the given media-path (a file or directory under MediaDir),
+// parses season/episode from each filename, and hardlinks them into LibraryDir
 // as {title}/Season N/{title} - S01E01.ext so Jellyfin can find them.
 // Files that cannot be parsed for episode info are skipped.
-func AddTVSeason(dirs config.Directories, mediaPath string, title string) ([]string, error) {
-	srcDir := filepath.Join(dirs.Media, mediaPath)
+func (mgr MediaManager) AddTVSeason(mediaPath string, title string) ([]string, error) {
+	srcDir := filepath.Join(mgr.MediaDir, mediaPath)
 	videos, err := FindVideoFiles(srcDir)
 	if err != nil {
 		return nil, err
@@ -249,19 +243,19 @@ func AddTVSeason(dirs config.Directories, mediaPath string, title string) ([]str
 			continue
 		}
 		ext := filepath.Ext(srcPath)
-		seasonDir := filepath.Join(dirs.JellyfinTV, title, fmt.Sprintf("Season %d", info.Season))
+		seasonDir := filepath.Join(mgr.LibraryDir, title, fmt.Sprintf("Season %d", info.Season))
 		destPath := filepath.Join(seasonDir, fmt.Sprintf("%s - %s%s", title, info.FormatCode(), ext))
 		links[srcPath] = destPath
 	}
 	return hardlinkFiles(links)
 }
 
-// AddMovie finds video file(s) at the given media-path (a file or directory under dirs.Media),
+// AddMovie finds video file(s) at the given media-path (a file or directory under MediaDir),
 // plus audio tracks (.XX.aac, .XX.ac3) and subtitles (.XX.srt) with 2-letter language codes,
-// and hardlinks them into dirs.JellyfinMovies. Videos: {title}/{title}{ext} or -part-N for
+// and hardlinks them into LibraryDir. Videos: {title}/{title}{ext} or -part-N for
 // multiple. Audio/subs: {title}/{title}.{lang}.{ext} (e.g. title.es.aac, title.en.srt).
-func AddMovie(dirs config.Directories, mediaPath string, title string) ([]string, error) {
-	srcPath := filepath.Join(dirs.Media, mediaPath)
+func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, error) {
+	srcPath := filepath.Join(mgr.MediaDir, mediaPath)
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		return nil, fmt.Errorf("media path %q: %w", srcPath, err)
@@ -275,7 +269,7 @@ func AddMovie(dirs config.Directories, mediaPath string, title string) ([]string
 		return nil, nil
 	}
 
-	movieDir := filepath.Join(dirs.JellyfinMovies, title)
+	movieDir := filepath.Join(mgr.LibraryDir, title)
 	links := make(map[string]string)
 	for i, src := range videos {
 		ext := filepath.Ext(src)
