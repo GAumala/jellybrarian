@@ -1,6 +1,7 @@
 package media
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,9 @@ import (
 
 	"jellybrarian/text"
 )
+
+// TitleNotFound is returned by SubtitleMovie when no library folder exists for the given title.
+var TitleNotFound = errors.New("title not found")
 
 type albumInfo struct {
 	artist string
@@ -300,13 +304,14 @@ func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, erro
 // SubtitleMovie creates a subtitle file for an existing movie in the library.
 // The movie directory must exist under LibraryDir/title.
 // If lang is non-empty, the file will be named {title}.{lang}.srt, otherwise {title}.srt.
+// subs is the full SRT (or other subtitle) text to write.
 // Returns the path to the created subtitle file.
-func (mgr MediaManager) SubtitleMovie(title, lang, subtitleContents string) (string, error) {
+func (mgr MediaManager) SubtitleMovie(title, lang, subs string) (string, error) {
 	movieDir := filepath.Join(mgr.LibraryDir, title)
 	// Check that movie directory exists
 	if _, err := os.Stat(movieDir); err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("movie directory %q does not exist", movieDir)
+			return "", fmt.Errorf("%w: the provided title %q was not found in the movies library; use the exact movie folder name", TitleNotFound, title)
 		}
 		return "", fmt.Errorf("cannot access movie directory %q: %w", movieDir, err)
 	}
@@ -320,7 +325,7 @@ func (mgr MediaManager) SubtitleMovie(title, lang, subtitleContents string) (str
 	subPath := filepath.Join(movieDir, filename)
 
 	// Write file, overwriting if exists
-	if err := os.WriteFile(subPath, []byte(subtitleContents), 0644); err != nil {
+	if err := os.WriteFile(subPath, []byte(subs), 0644); err != nil {
 		return "", fmt.Errorf("failed to write subtitle file %q: %w", subPath, err)
 	}
 	return subPath, nil

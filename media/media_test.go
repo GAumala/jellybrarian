@@ -1,9 +1,9 @@
 package media
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -642,8 +642,8 @@ func TestSubtitleMovie_MovieDirectoryMissing(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when movie directory does not exist")
 	}
-	if !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("error should mention directory does not exist, got: %v", err)
+	if !errors.Is(err, TitleNotFound) {
+		t.Errorf("expected TitleNotFound, got: %v", err)
 	}
 }
 

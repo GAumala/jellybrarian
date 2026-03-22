@@ -2,10 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
 	"jellybrarian/config"
+	"jellybrarian/media"
 )
 
 func New(cfg *config.Config) http.Handler {
@@ -178,6 +180,10 @@ func New(cfg *config.Config) http.Handler {
 
 		path, err := mgr.SubtitleMovie(title, lang, string(body))
 		if err != nil {
+			if errors.Is(err, media.TitleNotFound) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
