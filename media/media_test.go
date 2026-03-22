@@ -3,6 +3,7 @@ package media
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -566,6 +567,83 @@ func TestAddMovie_ThreeLetterLangAndPlainSrt(t *testing.T) {
 		if !wantNames[name] {
 			t.Errorf("unexpected linked file: %s", path)
 		}
+	}
+}
+
+func TestSubtitleMovie_WithLang(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	// Create movie directory in library
+	title := "Inception (2010)"
+	movieDir := filepath.Join(env.Movies, title)
+	if err := os.MkdirAll(movieDir, 0755); err != nil {
+		t.Fatalf("failed to create movie directory: %v", err)
+	}
+
+	subtitleContent := "1\n00:00:01,000 --> 00:00:05,000\nHello world\n"
+	lang := "es"
+	path, err := mgr.SubtitleMovie(title, lang, subtitleContent)
+	if err != nil {
+		t.Fatalf("SubtitleMovie: %v", err)
+	}
+
+	expectedPath := filepath.Join(movieDir, "Inception (2010).es.srt")
+	if path != expectedPath {
+		t.Errorf("expected path %q, got %q", expectedPath, path)
+	}
+
+	// Check file exists with correct content
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read subtitle file: %v", err)
+	}
+	if string(content) != subtitleContent {
+		t.Errorf("subtitle content mismatch: got %q, want %q", string(content), subtitleContent)
+	}
+}
+
+func TestSubtitleMovie_NoLang(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	title := "The Matrix (1999)"
+	movieDir := filepath.Join(env.Movies, title)
+	if err := os.MkdirAll(movieDir, 0755); err != nil {
+		t.Fatalf("failed to create movie directory: %v", err)
+	}
+
+	subtitleContent := "1\n00:00:01,000 --> 00:00:05,000\nWelcome to the real world.\n"
+	path, err := mgr.SubtitleMovie(title, "", subtitleContent)
+	if err != nil {
+		t.Fatalf("SubtitleMovie: %v", err)
+	}
+
+	expectedPath := filepath.Join(movieDir, "The Matrix (1999).srt")
+	if path != expectedPath {
+		t.Errorf("expected path %q, got %q", expectedPath, path)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read subtitle file: %v", err)
+	}
+	if string(content) != subtitleContent {
+		t.Errorf("subtitle content mismatch")
+	}
+}
+
+func TestSubtitleMovie_MovieDirectoryMissing(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	title := "Nonexistent Movie"
+	_, err := mgr.SubtitleMovie(title, "en", "subtitle")
+	if err == nil {
+		t.Fatal("expected error when movie directory does not exist")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("error should mention directory does not exist, got: %v", err)
 	}
 }
 

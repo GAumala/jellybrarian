@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"jellybrarian/config"
@@ -151,6 +152,41 @@ func New(cfg *config.Config) http.Handler {
 			"media_path": mediaPath,
 			"title":      title,
 			"linked":     linked,
+		})
+	})
+
+	mux.HandleFunc("PUT /media/movies/subtitles", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		title := r.URL.Query().Get("title")
+		lang := r.URL.Query().Get("lang")
+
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			return
+		}
+
+		path, err := mgr.SubtitleMovie(title, lang, string(body))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"title": title,
+			"lang": lang,
+			"path": path,
 		})
 	})
 

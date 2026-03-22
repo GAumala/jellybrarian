@@ -296,3 +296,32 @@ func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, erro
 	}
 	return hardlinkFiles(links)
 }
+
+// SubtitleMovie creates a subtitle file for an existing movie in the library.
+// The movie directory must exist under LibraryDir/title.
+// If lang is non-empty, the file will be named {title}.{lang}.srt, otherwise {title}.srt.
+// Returns the path to the created subtitle file.
+func (mgr MediaManager) SubtitleMovie(title, lang, subtitleContents string) (string, error) {
+	movieDir := filepath.Join(mgr.LibraryDir, title)
+	// Check that movie directory exists
+	if _, err := os.Stat(movieDir); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("movie directory %q does not exist", movieDir)
+		}
+		return "", fmt.Errorf("cannot access movie directory %q: %w", movieDir, err)
+	}
+
+	var filename string
+	if lang == "" {
+		filename = title + ".srt"
+	} else {
+		filename = fmt.Sprintf("%s.%s.srt", title, strings.ToLower(lang))
+	}
+	subPath := filepath.Join(movieDir, filename)
+
+	// Write file, overwriting if exists
+	if err := os.WriteFile(subPath, []byte(subtitleContents), 0644); err != nil {
+		return "", fmt.Errorf("failed to write subtitle file %q: %w", subPath, err)
+	}
+	return subPath, nil
+}
