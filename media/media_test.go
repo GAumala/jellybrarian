@@ -647,6 +647,66 @@ func TestSubtitleMovie_MovieDirectoryMissing(t *testing.T) {
 	}
 }
 
+func TestDelistTitle_Movies_RemovesLibraryOnly(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+	createFile(t, env.Media, "Inception.2010.1080p.mkv", "movie-content")
+	if _, err := mgr.AddMovie("Inception.2010.1080p.mkv", "Inception (2010)"); err != nil {
+		t.Fatalf("AddMovie: %v", err)
+	}
+	libDir := filepath.Join(env.Movies, "Inception (2010)")
+	if _, err := os.Stat(libDir); err != nil {
+		t.Fatalf("library dir missing: %v", err)
+	}
+	srcPath := filepath.Join(env.Media, "Inception.2010.1080p.mkv")
+	if err := mgr.DelistTitle("Inception (2010)"); err != nil {
+		t.Fatalf("DelistTitle: %v", err)
+	}
+	if _, err := os.Stat(libDir); !os.IsNotExist(err) {
+		t.Fatal("expected library folder removed")
+	}
+	if _, err := os.Stat(srcPath); err != nil {
+		t.Fatalf("media file should remain: %v", err)
+	}
+}
+
+func TestDelistTitle_TV(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrTV()
+	showDir := filepath.Join(env.Media, "Show")
+	createFile(t, showDir, "Show.S01E01.mkv", "ep1")
+	if _, err := mgr.AddTVSeason("Show", "My Show (2020)"); err != nil {
+		t.Fatalf("AddTVSeason: %v", err)
+	}
+	libDir := filepath.Join(env.TV, "My Show (2020)")
+	if err := mgr.DelistTitle("My Show (2020)"); err != nil {
+		t.Fatalf("DelistTitle: %v", err)
+	}
+	if _, err := os.Stat(libDir); !os.IsNotExist(err) {
+		t.Fatal("expected TV library folder removed")
+	}
+}
+
+func TestDelistTitle_MissingIsNoOp(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+	if err := mgr.DelistTitle("Does Not Exist"); err != nil {
+		t.Fatalf("delisting missing title should succeed, got: %v", err)
+	}
+}
+
+func TestDelistTitle_InvalidTitle(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+	err := mgr.DelistTitle("../escape")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrInvalidLibraryTitle) {
+		t.Fatalf("expected ErrInvalidLibraryTitle, got %v", err)
+	}
+}
+
 func mustStat(t *testing.T, path string) os.FileInfo {
 	t.Helper()
 	info, err := os.Stat(path)

@@ -69,7 +69,10 @@ Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, d
 | `GET /media/movies/titles` | `jellyfin_movies` |
 | `PUT /media/artists/{artist}/organize` | `jellyfin_music` |
 | `PUT /media/tv/add` | `jellyfin_tv` |
+| `PUT /media/tv/delist` | `jellyfin_tv` |
 | `PUT /media/movies/add` | `jellyfin_movies` |
+| `PUT /media/movies/subtitles` | `jellyfin_movies` |
+| `PUT /media/movies/delist` | `jellyfin_movies` |
 
 ## Run
 
@@ -264,6 +267,89 @@ Response:
 ```
 
 Existing destination files are replaced when linking.
+
+---
+
+### `PUT /media/movies/subtitles`
+
+Writes a subtitle file into an existing movie folder in the selected **movies** Jellyfin library.
+The request body is the raw subtitle file contents (e.g. **SRT**), not JSON.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `title`   | yes      | Exact movie folder name (same as for `PUT /media/movies/add`, e.g. `Inception (2010)`). |
+| `lang`    | no       | If set (e.g. `en`, `es`), the file is named `{title}.{lang}.srt`. If omitted, the file is `{title}.srt`. |
+| `lib-index` | no   | Which `jellyfin_movies` path to use (default `0`). |
+
+```bash
+curl -X PUT "http://localhost:8090/media/movies/subtitles?title=Inception%20(2010)&lang=en" \
+  --data-binary @subtitle.srt
+```
+
+Response:
+```json
+{
+  "title": "Inception (2010)",
+  "lang": "en",
+  "path": "/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).en.srt"
+}
+```
+
+**400** if the movie folder does not exist, or if `title` is not a valid single folder name under the library. Files under the **media** directory are not read or modified.
+
+---
+
+### `PUT /media/tv/delist`
+
+Removes the TV show folder `{title}` under the selected **TV** Jellyfin library (everything Jellyfin had for that show: hard links, season folders, etc.). Files under the **media** directory are **not** deleted.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `title`   | yes      | Exact show folder name (as listed by `GET /media/tv/titles`). |
+| `lib-index` | no   | Which `jellyfin_tv` path to use (default `0`). |
+
+If that folder is already absent, the request still succeeds (idempotent).
+
+```bash
+curl -X PUT "http://localhost:8090/media/tv/delist?title=Breaking%20Bad%20(2008)"
+```
+
+Response:
+```json
+{ "title": "Breaking Bad (2008)" }
+```
+
+**400** if `title` cannot be resolved to a direct child folder of the library (e.g. path-like values).
+
+---
+
+### `PUT /media/movies/delist`
+
+Removes the movie folder `{title}` under the selected **movies** Jellyfin library. Same behavior as TV delist: only the library tree is removed; **media** files stay on disk.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `title`   | yes      | Exact movie folder name (as listed by `GET /media/movies/titles`). |
+| `lib-index` | no   | Which `jellyfin_movies` path to use (default `0`). |
+
+If the folder is already gone, the request succeeds.
+
+```bash
+curl -X PUT "http://localhost:8090/media/movies/delist?title=Inception%20(2010)"
+```
+
+Response:
+```json
+{ "title": "Inception (2010)" }
+```
+
+**400** if `title` is not a valid single folder name under the library.
 
 ---
 

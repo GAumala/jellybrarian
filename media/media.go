@@ -14,6 +14,9 @@ import (
 // TitleNotFound is returned by SubtitleMovie when no library folder exists for the given title.
 var TitleNotFound = errors.New("title not found")
 
+// ErrInvalidLibraryTitle is returned when LibraryDir/title is not a direct child folder of LibraryDir.
+var ErrInvalidLibraryTitle = errors.New("invalid library title")
+
 type albumInfo struct {
 	artist string
 	title  string
@@ -116,6 +119,45 @@ func (mgr MediaManager) ListLibraryTitles(q string) ([]string, error) {
 		return nil, err
 	}
 	return filterTitlesByQuery(names, q), nil
+}
+
+// resolveLibraryTitleDir returns filepath.Join(LibraryDir, title) after validating that the path is
+// a direct child of LibraryDir: not the library root itself, not outside it, and not nested deeper
+// (e.g. no extra path segments in title). Join + Clean encode the same rules as manual string checks.
+func (mgr MediaManager) resolveLibraryTitleDir(title string) (string, error) {
+	dir := filepath.Join(mgr.LibraryDir, title)
+	cleanLib := filepath.Clean(mgr.LibraryDir)
+	cleanDir := filepath.Clean(dir)
+	if cleanDir == cleanLib {
+		return "", fmt.Errorf("%w: title must name a folder inside the library directory", ErrInvalidLibraryTitle)
+	}
+	if filepath.Clean(filepath.Dir(cleanDir)) != cleanLib {
+		return "", fmt.Errorf("%w: title must be a direct child folder of the library directory", ErrInvalidLibraryTitle)
+	}
+	return dir, nil
+}
+
+// DelistTitle removes the library folder LibraryDir/title (hardlinks and files created under it).
+// Files under MediaDir are not deleted. If the folder is already absent, DelistTitle succeeds (idempotent).
+func (mgr MediaManager) DelistTitle(title string) error {
+	dir, err := mgr.resolveLibraryTitleDir(title)
+	if err != nil {
+		return err
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("cannot access library directory %q: %w", dir, err)
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("library entry %q is not a directory", title)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("failed to remove library directory %q: %w", dir, err)
+	}
+	return nil
 }
 
 // OrganizeArtist finds all directories in the media dir matching "<artist> - <album>"
@@ -307,8 +349,10 @@ func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, erro
 // subs is the full SRT (or other subtitle) text to write.
 // Returns the path to the created subtitle file.
 func (mgr MediaManager) SubtitleMovie(title, lang, subs string) (string, error) {
-	movieDir := filepath.Join(mgr.LibraryDir, title)
-	// Check that movie directory exists
+	movieDir, err := mgr.resolveLibraryTitleDir(title)
+	if err != nil {
+		return "", err
+	}
 	if _, err := os.Stat(movieDir); err != nil {
 		if os.IsNotExist(err) {
 			return "", fmt.Errorf("%w: the provided title %q was not found in the movies library; use the exact movie folder name", TitleNotFound, title)

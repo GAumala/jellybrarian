@@ -180,7 +180,7 @@ func New(cfg *config.Config) http.Handler {
 
 		path, err := mgr.SubtitleMovie(title, lang, string(body))
 		if err != nil {
-			if errors.Is(err, media.TitleNotFound) {
+			if errors.Is(err, media.TitleNotFound) || errors.Is(err, media.ErrInvalidLibraryTitle) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -193,6 +193,62 @@ func New(cfg *config.Config) http.Handler {
 			"title": title,
 			"lang": lang,
 			"path": path,
+		})
+	})
+
+	mux.HandleFunc("PUT /media/tv/delist", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		title := r.URL.Query().Get("title")
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		if err := mgr.DelistTitle(title); err != nil {
+			if errors.Is(err, media.ErrInvalidLibraryTitle) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"title": title,
+		})
+	})
+
+	mux.HandleFunc("PUT /media/movies/delist", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		title := r.URL.Query().Get("title")
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		if err := mgr.DelistTitle(title); err != nil {
+			if errors.Is(err, media.ErrInvalidLibraryTitle) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"title": title,
 		})
 	})
 
