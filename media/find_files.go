@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -42,6 +43,33 @@ func FindVideoFiles(path string) ([]string, error) {
 		return nil, fmt.Errorf("scanning %q: %w", path, err)
 	}
 	return videos, nil
+}
+
+// listAllFilesUnder returns the path of every file under path: if path is a file, a single-element slice;
+// if a directory, all file paths in a recursive walk. Directory entries are not included.
+func listAllFilesUnder(path string) ([]string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return []string{path}, nil
+	}
+	var files []string
+	err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			files = append(files, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scanning %q: %w", path, err)
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 // langTrackRegex matches .XX or .XXX plus .aac, .ac3, or .srt at end of filename (2 or 3-letter language code).

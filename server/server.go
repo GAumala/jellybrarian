@@ -112,6 +112,11 @@ func New(cfg *config.Config) http.Handler {
 
 		linked, err := mgr.AddTVSeason(mediaPath, title)
 		if err != nil {
+			var nv *media.ErrNoVideoFiles
+			if errors.As(err, &nv) {
+				writeErrNoVideoFiles(w, nv)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -145,6 +150,11 @@ func New(cfg *config.Config) http.Handler {
 
 		linked, err := mgr.AddMovie(mediaPath, title)
 		if err != nil {
+			var nv *media.ErrNoVideoFiles
+			if errors.As(err, &nv) {
+				writeErrNoVideoFiles(w, nv)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -253,4 +263,14 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	return mux
+}
+
+func writeErrNoVideoFiles(w http.ResponseWriter, nv *media.ErrNoVideoFiles) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error":   nv.Error(),
+		"src_dir": nv.SrcDir,
+		"files":   nv.Files,
+	})
 }

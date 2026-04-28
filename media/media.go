@@ -17,6 +17,18 @@ var TitleNotFound = errors.New("title not found")
 // ErrInvalidLibraryTitle is returned when LibraryDir/title is not a direct child folder of LibraryDir.
 var ErrInvalidLibraryTitle = errors.New("invalid library title")
 
+// ErrNoVideoFiles is returned by AddTVSeason and AddMovie when no .mp4 or .mkv files exist at the
+// source path. Files is every file path under that source (one element if the path is a single file;
+// a recursive listing if it is a directory) so callers can see what was present.
+type ErrNoVideoFiles struct {
+	SrcDir string
+	Files  []string
+}
+
+func (e *ErrNoVideoFiles) Error() string {
+	return fmt.Sprintf("no video files (.mp4/.mkv) found under %q (%d file(s) in path)", e.SrcDir, len(e.Files))
+}
+
 type albumInfo struct {
 	artist string
 	title  string
@@ -281,6 +293,13 @@ func (mgr MediaManager) AddTVSeason(mediaPath string, title string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+	if len(videos) == 0 {
+		files, listErr := listAllFilesUnder(srcDir)
+		if listErr != nil {
+			return nil, fmt.Errorf("no video files and could not list source: %w", listErr)
+		}
+		return nil, &ErrNoVideoFiles{SrcDir: srcDir, Files: files}
+	}
 	links := make(map[string]string)
 	for _, srcPath := range videos {
 		base := filepath.Base(srcPath)
@@ -312,7 +331,11 @@ func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, erro
 		return nil, err
 	}
 	if len(videos) == 0 {
-		return nil, nil
+		files, listErr := listAllFilesUnder(srcPath)
+		if listErr != nil {
+			return nil, fmt.Errorf("no video files and could not list source: %w", listErr)
+		}
+		return nil, &ErrNoVideoFiles{SrcDir: srcPath, Files: files}
 	}
 
 	movieDir := filepath.Join(mgr.LibraryDir, title)

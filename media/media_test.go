@@ -376,6 +376,77 @@ func TestFindVideoFiles_SingleFile(t *testing.T) {
 	}
 }
 
+func TestAddMovie_ErrNoVideoFiles(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+	txtPath := filepath.Join(env.Media, "only.txt")
+	if err := os.WriteFile(txtPath, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := mgr.AddMovie("only.txt", "Title")
+	var nv *ErrNoVideoFiles
+	if !errors.As(err, &nv) {
+		t.Fatalf("expected ErrNoVideoFiles, got %v", err)
+	}
+	if len(nv.Files) != 1 || nv.Files[0] != txtPath {
+		t.Fatalf("Files = %v, want [%s]", nv.Files, txtPath)
+	}
+}
+
+func TestAddTVSeason_ErrNoVideoFiles(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrTV()
+	showDir := filepath.Join(env.Media, "EmptyShow")
+	if err := os.MkdirAll(showDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	createFile(t, showDir, "notes.txt", "no videos")
+	_, err := mgr.AddTVSeason("EmptyShow", "Empty Show (2020)")
+	var nv *ErrNoVideoFiles
+	if !errors.As(err, &nv) {
+		t.Fatalf("expected ErrNoVideoFiles, got %v", err)
+	}
+	want := filepath.Join(showDir, "notes.txt")
+	if len(nv.Files) != 1 || nv.Files[0] != want {
+		t.Fatalf("Files = %v, want [%s]", nv.Files, want)
+	}
+}
+
+// Spanish "Capitulo N" titles (no SxxExx / Exx) match production cases where every file is skipped.
+func TestAddTVSeason_VideosPresentButNoneParsed(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrTV()
+
+	showDir := filepath.Join(env.Media, "Nothing")
+	if err := os.MkdirAll(showDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	createFile(t, showDir, "Nada [2023] Capitulo 1 - Estar en el horno.mkv", "ep1")
+	createFile(t, showDir, "Nada [2023] Capitulo 2 - Remar en dulce de leche.mkv", "ep2")
+
+	linked, err := mgr.AddTVSeason("Nothing", "Nada (2023)")
+	if err != nil {
+		t.Fatalf("AddTVSeason: %v", err)
+	}
+	if len(linked) != 0 {
+		t.Fatalf("expected no linked files when episode parser skips all videos, got %v", linked)
+	}
+
+	libTitle := filepath.Join(env.TV, "Nada (2023)")
+	if _, err := os.Stat(libTitle); !os.IsNotExist(err) {
+		t.Fatalf("expected no library folder when nothing was linked, stat %q: %v", libTitle, err)
+	}
+
+	for _, base := range []string{
+		"Nada [2023] Capitulo 1 - Estar en el horno.mkv",
+		"Nada [2023] Capitulo 2 - Remar en dulce de leche.mkv",
+	} {
+		if GetSeasonEpisode(base, false) != nil {
+			t.Fatalf("test assumption wrong: expected %q to be unparsed by GetSeasonEpisode", base)
+		}
+	}
+}
+
 func TestAddTVSeason(t *testing.T) {
 	env := newTestEnv(t)
 	mgr := env.mgrTV()
