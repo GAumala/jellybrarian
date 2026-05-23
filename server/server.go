@@ -180,7 +180,9 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 
-		linked, err := mgr.AddTVSeason(mediaPath, title)
+		files := parseFilesBody(r)
+
+		linked, err := mgr.AddTVSeason(mediaPath, title, files)
 		if err != nil {
 			var nv *media.ErrNoVideoFiles
 			if errors.As(err, &nv) {
@@ -218,7 +220,9 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 
-		linked, err := mgr.AddMovie(mediaPath, title)
+		files := parseFilesBody(r)
+
+		linked, err := mgr.AddMovie(mediaPath, title, files)
 		if err != nil {
 			var nv *media.ErrNoVideoFiles
 			if errors.As(err, &nv) {

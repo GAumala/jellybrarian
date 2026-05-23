@@ -383,7 +383,7 @@ func TestAddMovie_ErrNoVideoFiles(t *testing.T) {
 	if err := os.WriteFile(txtPath, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := mgr.AddMovie("only.txt", "Title")
+	_, err := mgr.AddMovie("only.txt", "Title", nil)
 	var nv *ErrNoVideoFiles
 	if !errors.As(err, &nv) {
 		t.Fatalf("expected ErrNoVideoFiles, got %v", err)
@@ -401,7 +401,7 @@ func TestAddTVSeason_ErrNoVideoFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	createFile(t, showDir, "notes.txt", "no videos")
-	_, err := mgr.AddTVSeason("EmptyShow", "Empty Show (2020)")
+	_, err := mgr.AddTVSeason("EmptyShow", "Empty Show (2020)", nil)
 	var nv *ErrNoVideoFiles
 	if !errors.As(err, &nv) {
 		t.Fatalf("expected ErrNoVideoFiles, got %v", err)
@@ -424,7 +424,7 @@ func TestAddTVSeason_VideosPresentButNoneParsed(t *testing.T) {
 	createFile(t, showDir, "Nada [2023] Capitulo 1 - Estar en el horno.mkv", "ep1")
 	createFile(t, showDir, "Nada [2023] Capitulo 2 - Remar en dulce de leche.mkv", "ep2")
 
-	linked, err := mgr.AddTVSeason("Nothing", "Nada (2023)")
+	linked, err := mgr.AddTVSeason("Nothing", "Nada (2023)", nil)
 	if err != nil {
 		t.Fatalf("AddTVSeason: %v", err)
 	}
@@ -455,7 +455,7 @@ func TestAddTVSeason(t *testing.T) {
 	createFile(t, showDir, "Breaking.Bad.S01E01.Pilot.720p.WEB-DL.x264-GROUP.mkv", "pilot")
 	createFile(t, showDir, "Breaking.Bad.S01E02.Cats.In.The.Bag.720p.mkv", "ep2")
 
-	linked, err := mgr.AddTVSeason("Breaking Bad", "Breaking Bad (2008)")
+	linked, err := mgr.AddTVSeason("Breaking Bad", "Breaking Bad (2008)", nil)
 	if err != nil {
 		t.Fatalf("AddTVSeason: %v", err)
 	}
@@ -499,7 +499,7 @@ func TestAddMovie_SingleFile(t *testing.T) {
 
 	createFile(t, env.Media, "Inception.2010.1080p.mkv", "movie-content")
 
-	linked, err := mgr.AddMovie("Inception.2010.1080p.mkv", "Inception (2010)")
+	linked, err := mgr.AddMovie("Inception.2010.1080p.mkv", "Inception (2010)", nil)
 	if err != nil {
 		t.Fatalf("AddMovie: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestAddMovie_MultipleParts(t *testing.T) {
 	createFile(t, movieDir, "part1.mkv", "part1")
 	createFile(t, movieDir, "part2.mkv", "part2")
 
-	linked, err := mgr.AddMovie("Lord of the Rings", "The Lord of the Rings (2001)")
+	linked, err := mgr.AddMovie("Lord of the Rings", "The Lord of the Rings (2001)", nil)
 	if err != nil {
 		t.Fatalf("AddMovie: %v", err)
 	}
@@ -577,7 +577,7 @@ func TestAddMovie_AudioAndSubtitles(t *testing.T) {
 	createFile(t, movieDir, "Dune.2021.es.aac", "spanish-audio")
 	createFile(t, movieDir, "Dune.2021.en.srt", "english-subs")
 
-	linked, err := mgr.AddMovie("Dune", "Dune (2021)")
+	linked, err := mgr.AddMovie("Dune", "Dune (2021)", nil)
 	if err != nil {
 		t.Fatalf("AddMovie: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestAddMovie_ThreeLetterLangAndPlainSrt(t *testing.T) {
 	createFile(t, movieDir, "Alien.1979.srt", "no-lang-subs")
 	createFile(t, movieDir, "Alien.1979.spa.aac", "spanish-audio")
 
-	linked, err := mgr.AddMovie("Alien", "Alien (1979)")
+	linked, err := mgr.AddMovie("Alien", "Alien (1979)", nil)
 	if err != nil {
 		t.Fatalf("AddMovie: %v", err)
 	}
@@ -722,7 +722,7 @@ func TestDelistTitle_Movies_RemovesLibraryOnly(t *testing.T) {
 	env := newTestEnv(t)
 	mgr := env.mgrMovies()
 	createFile(t, env.Media, "Inception.2010.1080p.mkv", "movie-content")
-	if _, err := mgr.AddMovie("Inception.2010.1080p.mkv", "Inception (2010)"); err != nil {
+	if _, err := mgr.AddMovie("Inception.2010.1080p.mkv", "Inception (2010)", nil); err != nil {
 		t.Fatalf("AddMovie: %v", err)
 	}
 	libDir := filepath.Join(env.Movies, "Inception (2010)")
@@ -746,7 +746,7 @@ func TestDelistTitle_TV(t *testing.T) {
 	mgr := env.mgrTV()
 	showDir := filepath.Join(env.Media, "Show")
 	createFile(t, showDir, "Show.S01E01.mkv", "ep1")
-	if _, err := mgr.AddTVSeason("Show", "My Show (2020)"); err != nil {
+	if _, err := mgr.AddTVSeason("Show", "My Show (2020)", nil); err != nil {
 		t.Fatalf("AddTVSeason: %v", err)
 	}
 	libDir := filepath.Join(env.TV, "My Show (2020)")
@@ -921,6 +921,89 @@ func TestListMediaFiles_EmptyTitle(t *testing.T) {
 	_, err := mgr.ListMediaFiles("")
 	if err == nil {
 		t.Fatal("expected error for empty title")
+	}
+}
+
+func TestAddMovie_WithFilesMap(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	createFile(t, env.Media, "movie.mkv", "video-content")
+	createFile(t, env.Media, "audio.es.aac", "spanish-audio")
+
+	files := map[string]string{
+		"movie.mkv":    "Inception (2010).mkv",
+		"audio.es.aac": "Inception (2010).es.aac",
+	}
+	linked, err := mgr.AddMovie(".", "Inception (2010)", files)
+	if err != nil {
+		t.Fatalf("AddMovie with files map: %v", err)
+	}
+	if len(linked) != 2 {
+		t.Fatalf("expected 2 linked files, got %d: %v", len(linked), linked)
+	}
+	destDir := filepath.Join(env.Movies, "Inception (2010)")
+	for _, name := range []string{"Inception (2010).mkv", "Inception (2010).es.aac"} {
+		path := filepath.Join(destDir, name)
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("expected file %s to exist: %v", path, err)
+		}
+	}
+}
+
+func TestAddTVSeason_WithFilesMap(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrTV()
+
+	createFile(t, env.Media, "ep1.mkv", "video1")
+	createFile(t, env.Media, "ep2.mkv", "video2")
+
+	files := map[string]string{
+		"ep1.mkv": "Season 1/My Show (2020) - S01E01.mkv",
+		"ep2.mkv": "Season 1/My Show (2020) - S01E02.mkv",
+	}
+	linked, err := mgr.AddTVSeason(".", "My Show (2020)", files)
+	if err != nil {
+		t.Fatalf("AddTVSeason with files map: %v", err)
+	}
+	if len(linked) != 2 {
+		t.Fatalf("expected 2 linked files, got %d: %v", len(linked), linked)
+	}
+	seasonDir := filepath.Join(env.TV, "My Show (2020)", "Season 1")
+	for _, name := range []string{"My Show (2020) - S01E01.mkv", "My Show (2020) - S01E02.mkv"} {
+		path := filepath.Join(seasonDir, name)
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("expected file %s to exist: %v", path, err)
+		}
+	}
+}
+
+func TestAddMovie_WithFilesMap_EscapingSource(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	files := map[string]string{
+		"../../../etc/passwd": "movie.mkv",
+	}
+	_, err := mgr.AddMovie("SomeDir", "Title", files)
+	if err == nil {
+		t.Fatal("expected error for escaping source path")
+	}
+}
+
+func TestAddMovie_WithFilesMap_EscapingDest(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	os.Mkdir(filepath.Join(env.Media, "SomeDir"), 0755)
+	createFile(t, filepath.Join(env.Media, "SomeDir"), "movie.mkv", "video")
+
+	files := map[string]string{
+		"movie.mkv": "../../../etc/passwd",
+	}
+	_, err := mgr.AddMovie("SomeDir", "Title", files)
+	if err == nil {
+		t.Fatal("expected error for escaping destination path")
 	}
 }
 

@@ -321,12 +321,66 @@ func hardlinkFiles(links map[string]string) ([]string, error) {
 	return linked, nil
 }
 
+// validateRelPath validates that rel is a safe relative path under base.
+// Returns the absolute path if valid, or an error if the path escapes base.
+func validateRelPath(base, rel, label string) (string, error) {
+	if rel == "" {
+		return "", fmt.Errorf("path must not be empty")
+	}
+	abs := filepath.Join(base, rel)
+	cleanBase := filepath.Clean(base)
+	cleanAbs := filepath.Clean(abs)
+	if !strings.HasPrefix(cleanAbs, cleanBase+string(filepath.Separator)) && cleanAbs != cleanBase {
+		return "", fmt.Errorf("path %q escapes %s directory %q", rel, label, base)
+	}
+	return abs, nil
+}
+
+// buildLinksFromMap converts a map of relative src->dst paths into absolute paths
+// validated against srcBase (media dir) and dstBase (library title dir).
+func buildLinksFromMap(srcBase, dstBase string, files map[string]string) (map[string]string, error) {
+	links := make(map[string]string)
+	for srcRel, dstRel := range files {
+		srcAbs, err := resolveMediaFile(srcBase, srcRel)
+		if err != nil {
+			return nil, fmt.Errorf("invalid source path %q: %w", srcRel, err)
+		}
+		dstAbs, err := resolveLibraryFile(dstBase, dstRel)
+		if err != nil {
+			return nil, fmt.Errorf("invalid destination path %q: %w", dstRel, err)
+		}
+		links[srcAbs] = dstAbs
+	}
+	return links, nil
+}
+
+func resolveMediaFile(base, rel string) (string, error) {
+	return validateRelPath(base, rel, "media")
+}
+
+func resolveLibraryFile(base, rel string) (string, error) {
+	return validateRelPath(base, rel, "library")
+}
+
 // AddTVSeason finds all video files at the given media-path (a file or directory under MediaDir),
 // parses season/episode from each filename, and hardlinks them into LibraryDir
 // as {title}/Season N/{title} - S01E01.ext so Jellyfin can find them.
 // Files that cannot be parsed for episode info are skipped.
-func (mgr MediaManager) AddTVSeason(mediaPath string, title string) ([]string, error) {
+// If files is non-empty, it is used as a map of source->dest paths instead of auto-detecting.
+// Each source path must be relative to MediaDir/mediaPath; each dest path must be relative
+// to LibraryDir/title.
+func (mgr MediaManager) AddTVSeason(mediaPath string, title string, files map[string]string) ([]string, error) {
 	srcDir := filepath.Join(mgr.MediaDir, mediaPath)
+
+	if len(files) > 0 {
+		dstBase := filepath.Join(mgr.LibraryDir, title)
+		links, err := buildLinksFromMap(srcDir, dstBase, files)
+		if err != nil {
+			return nil, err
+		}
+		return hardlinkFiles(links)
+	}
+
 	videos, err := FindVideoFiles(srcDir)
 	if err != nil {
 		return nil, err
@@ -357,7 +411,21 @@ func (mgr MediaManager) AddTVSeason(mediaPath string, title string) ([]string, e
 // plus audio tracks (.XX.aac, .XX.ac3) and subtitles (.XX.srt) with 2-letter language codes,
 // and hardlinks them into LibraryDir. Videos: {title}/{title}{ext} or -part-N for
 // multiple. Audio/subs: {title}/{title}.{lang}.{ext} (e.g. title.es.aac, title.en.srt).
-func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, error) {
+// If files is non-empty, it is used as a map of source->dest paths instead of auto-detecting.
+// Each source path must be relative to MediaDir/mediaPath; each dest path must be relative
+// to LibraryDir/title.
+func (mgr MediaManager) AddMovie(mediaPath string, title string, files map[string]string) ([]string, error) {
+	srcDir := filepath.Join(mgr.MediaDir, mediaPath)
+
+	if len(files) > 0 {
+		dstBase := filepath.Join(mgr.LibraryDir, title)
+		links, err := buildLinksFromMap(srcDir, dstBase, files)
+		if err != nil {
+			return nil, err
+		}
+		return hardlinkFiles(links)
+	}
+
 	srcPath := filepath.Join(mgr.MediaDir, mediaPath)
 	info, err := os.Stat(srcPath)
 	if err != nil {
@@ -369,11 +437,11 @@ func (mgr MediaManager) AddMovie(mediaPath string, title string) ([]string, erro
 		return nil, err
 	}
 	if len(videos) == 0 {
-		files, listErr := listAllFilesUnder(srcPath)
+		allFiles, listErr := listAllFilesUnder(srcPath)
 		if listErr != nil {
 			return nil, fmt.Errorf("no video files and could not list source: %w", listErr)
 		}
-		return nil, &ErrNoVideoFiles{SrcDir: srcPath, Files: files}
+		return nil, &ErrNoVideoFiles{SrcDir: srcPath, Files: allFiles}
 	}
 
 	movieDir := filepath.Join(mgr.LibraryDir, title)
