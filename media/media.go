@@ -78,6 +78,29 @@ func (mgr MediaManager) ListMedia(limit int) ([]string, error) {
 	return names, nil
 }
 
+// ListMediaFiles returns all file paths under MediaDir/title, recursively.
+func (mgr MediaManager) ListMediaFiles(title string) ([]string, error) {
+	if title == "" {
+		return nil, fmt.Errorf("title must not be empty")
+	}
+	dir := filepath.Join(mgr.MediaDir, title)
+	cleanMedia := filepath.Clean(mgr.MediaDir)
+	cleanDir := filepath.Clean(dir)
+	if cleanDir == cleanMedia {
+		return nil, fmt.Errorf("title must name a folder inside the media directory")
+	}
+	if filepath.Clean(filepath.Dir(cleanDir)) != cleanMedia {
+		return nil, fmt.Errorf("title must be a direct child folder of the media directory")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("title %q not found in media directory", title)
+		}
+		return nil, fmt.Errorf("failed to stat media directory %q: %w", dir, err)
+	}
+	return listAllFilesUnder(dir)
+}
+
 // listJellyfinDirNames returns the names of immediate subdirectories under path, sorted alphabetically.
 func listJellyfinDirNames(path string) ([]string, error) {
 	entries, err := os.ReadDir(path)
@@ -147,6 +170,21 @@ func (mgr MediaManager) resolveLibraryTitleDir(title string) (string, error) {
 		return "", fmt.Errorf("%w: title must be a direct child folder of the library directory", ErrInvalidLibraryTitle)
 	}
 	return dir, nil
+}
+
+// ListTitleFiles returns all file paths under LibraryDir/title, recursively.
+func (mgr MediaManager) ListTitleFiles(title string) ([]string, error) {
+	dir, err := mgr.resolveLibraryTitleDir(title)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: the provided title %q was not found in the library", ErrInvalidLibraryTitle, title)
+		}
+		return nil, fmt.Errorf("failed to stat title directory %q: %w", dir, err)
+	}
+	return listAllFilesUnder(dir)
 }
 
 // DelistTitle removes the library folder LibraryDir/title (hardlinks and files created under it).

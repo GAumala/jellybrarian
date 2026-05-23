@@ -19,7 +19,6 @@ func New(cfg *config.Config) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		// ListMedia only reads MediaDir; lib-index is not used.
 		mgr := mediaManager(cfg, "")
 
 		names, err := mgr.ListMedia(limit)
@@ -29,6 +28,23 @@ func New(cfg *config.Config) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(names)
+	})
+
+	mux.HandleFunc("GET /media/files", func(w http.ResponseWriter, r *http.Request) {
+		title := r.URL.Query().Get("title")
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+		mgr := mediaManager(cfg, "")
+
+		files, err := mgr.ListMediaFiles(title)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(files)
 	})
 
 	mux.HandleFunc("GET /media/tv/titles", func(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +79,60 @@ func New(cfg *config.Config) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(names)
+	})
+
+	mux.HandleFunc("GET /media/movies/files", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		title := r.URL.Query().Get("title")
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		files, err := mgr.ListTitleFiles(title)
+		if err != nil {
+			if errors.Is(err, media.ErrInvalidLibraryTitle) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(files)
+	})
+
+	mux.HandleFunc("GET /media/tv/files", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		title := r.URL.Query().Get("title")
+		if title == "" {
+			http.Error(w, "title query parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		files, err := mgr.ListTitleFiles(title)
+		if err != nil {
+			if errors.Is(err, media.ErrInvalidLibraryTitle) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(files)
 	})
 
 	mux.HandleFunc("PUT /media/artists/{artist}/organize", func(w http.ResponseWriter, r *http.Request) {

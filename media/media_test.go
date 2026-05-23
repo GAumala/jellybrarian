@@ -778,6 +778,152 @@ func TestDelistTitle_InvalidTitle(t *testing.T) {
 	}
 }
 
+func TestListTitleFiles_Movies(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	os.Mkdir(filepath.Join(env.Movies, "Inception (2010)"), 0755)
+	files, err := mgr.ListTitleFiles("Inception (2010)")
+	if err != nil {
+		t.Fatalf("ListTitleFiles: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected empty list, got %v", files)
+	}
+
+	createFile(t, filepath.Join(env.Movies, "Inception (2010)"), "Inception (2010).mkv", "video")
+	createFile(t, filepath.Join(env.Movies, "Inception (2010)"), "Inception (2010).en.srt", "subs")
+
+	files, err = mgr.ListTitleFiles("Inception (2010)")
+	if err != nil {
+		t.Fatalf("ListTitleFiles: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d: %v", len(files), files)
+	}
+	want := []string{
+		filepath.Join(env.Movies, "Inception (2010)", "Inception (2010).en.srt"),
+		filepath.Join(env.Movies, "Inception (2010)", "Inception (2010).mkv"),
+	}
+	for i, w := range want {
+		if files[i] != w {
+			t.Errorf("files[%d] = %q, want %q", i, files[i], w)
+		}
+	}
+}
+
+func TestListTitleFiles_TV(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrTV()
+
+	os.Mkdir(filepath.Join(env.TV, "Breaking Bad (2008)"), 0755)
+	os.Mkdir(filepath.Join(env.TV, "Breaking Bad (2008)", "Season 1"), 0755)
+	createFile(t, filepath.Join(env.TV, "Breaking Bad (2008)", "Season 1"), "Breaking Bad (2008) - S01E01.mkv", "ep1")
+	createFile(t, filepath.Join(env.TV, "Breaking Bad (2008)", "Season 1"), "Breaking Bad (2008) - S01E02.mkv", "ep2")
+
+	files, err := mgr.ListTitleFiles("Breaking Bad (2008)")
+	if err != nil {
+		t.Fatalf("ListTitleFiles: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d: %v", len(files), files)
+	}
+}
+
+func TestListTitleFiles_InvalidTitle(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	_, err := mgr.ListTitleFiles("../escape")
+	if err == nil {
+		t.Fatal("expected error for invalid title")
+	}
+	if !errors.Is(err, ErrInvalidLibraryTitle) {
+		t.Errorf("expected ErrInvalidLibraryTitle, got %v", err)
+	}
+}
+
+func TestListTitleFiles_TitleNotFound(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	_, err := mgr.ListTitleFiles("Nonexistent Movie")
+	if err == nil {
+		t.Fatal("expected error for nonexistent title")
+	}
+	if !errors.Is(err, ErrInvalidLibraryTitle) {
+		t.Errorf("expected ErrInvalidLibraryTitle, got %v", err)
+	}
+}
+
+func TestListMediaFiles_EmptyDir(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	os.Mkdir(filepath.Join(env.Media, "SomeMovie"), 0755)
+	files, err := mgr.ListMediaFiles("SomeMovie")
+	if err != nil {
+		t.Fatalf("ListMediaFiles: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected empty list, got %v", files)
+	}
+}
+
+func TestListMediaFiles_WithFiles(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	createFile(t, filepath.Join(env.Media, "SomeMovie"), "video1.mkv", "content")
+	createFile(t, filepath.Join(env.Media, "SomeMovie"), "video2.mp4", "content")
+	createFile(t, filepath.Join(env.Media, "SomeMovie", "subdir"), "video3.mkv", "content")
+
+	files, err := mgr.ListMediaFiles("SomeMovie")
+	if err != nil {
+		t.Fatalf("ListMediaFiles: %v", err)
+	}
+	if len(files) != 3 {
+		t.Fatalf("expected 3 files, got %d: %v", len(files), files)
+	}
+	for _, f := range files {
+		if filepath.Dir(f) != filepath.Join(env.Media, "SomeMovie") {
+			if filepath.Dir(filepath.Dir(f)) != filepath.Join(env.Media, "SomeMovie") {
+				t.Errorf("file %q not under SomeMovie", f)
+			}
+		}
+	}
+}
+
+func TestListMediaFiles_InvalidTitle(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	_, err := mgr.ListMediaFiles("../escape")
+	if err == nil {
+		t.Fatal("expected error for invalid title")
+	}
+}
+
+func TestListMediaFiles_TitleNotFound(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	_, err := mgr.ListMediaFiles("Nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent title")
+	}
+}
+
+func TestListMediaFiles_EmptyTitle(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMovies()
+
+	_, err := mgr.ListMediaFiles("")
+	if err == nil {
+		t.Fatal("expected error for empty title")
+	}
+}
+
 func mustStat(t *testing.T, path string) os.FileInfo {
 	t.Helper()
 	info, err := os.Stat(path)
