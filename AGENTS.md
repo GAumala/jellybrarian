@@ -140,6 +140,7 @@ go build -o jellybrarian .
 
 The `Config` struct holds:
 - `Media` (string) - staging area for downloads
+- `AuthToken` (string) - optional token for all HTTP requests; empty disables auth
 - `JellyfinMusic`, `JellyfinMovies`, `JellyfinTV` (each `[]string`) - library roots
 
 Multiple library paths are supported via TOML arrays. The `lib-index` query param (default `0`) selects which path to use.

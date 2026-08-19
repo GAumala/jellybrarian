@@ -38,6 +38,7 @@ Copy and edit `config.toml`.
 | Key | Required | Description |
 |-----|----------|-------------|
 | `media` | **yes** | Root folder for downloads and staging (where new rips land). Must exist as a directory. |
+| `auth_token` | no | Secret token required on every HTTP request when set. Omit or leave empty to disable authentication. |
 | `jellyfin_music` | no | Music library root(s). Omit if you only use movies/TV. |
 | `jellyfin_movies` | no | Movie library root(s). |
 | `jellyfin_tv` | no | TV library root(s). |
@@ -46,6 +47,7 @@ Each `jellyfin_*` value may be either a **single string** or a **TOML array of s
 
 ```toml
 media = "/mnt/hdd0/media"
+auth_token = "replace-with-a-long-random-secret"
 
 jellyfin_music  = "/mnt/hdd0/jellyfin/music"
 jellyfin_movies = "/mnt/ssd/jellyfin/movies"
@@ -57,6 +59,15 @@ Validation on startup:
 - Every configured path must exist and be a directory.
 - Empty strings are not allowed inside a `jellyfin_*` list.
 - An empty list (`jellyfin_tv = []`) or omitting a key means you are not using that library type from the API (endpoints that need that list will return an error).
+
+## Authentication
+
+When `auth_token` is set, every endpoint requires the configured token in one of these headers:
+
+```bash
+curl -H "Authorization: Bearer $JELLYBRARIAN_TOKEN" http://localhost:8090/media/list
+curl -H "X-Jellybrarian-Token: $JELLYBRARIAN_TOKEN" http://localhost:8090/media/list
+```
 
 ### Choosing a library at runtime (`lib-index`)
 

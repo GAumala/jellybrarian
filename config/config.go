@@ -11,6 +11,7 @@ import (
 // each may be a string or []string (single string becomes a one-element slice).
 type rawConfig struct {
 	Media          string `toml:"media"`
+	AuthToken      string `toml:"auth_token"`
 	JellyfinMusic  any    `toml:"jellyfin_music"`
 	JellyfinMovies any    `toml:"jellyfin_movies"`
 	JellyfinTV     any    `toml:"jellyfin_tv"`
@@ -18,9 +19,11 @@ type rawConfig struct {
 
 // Config is the normalized shape after Load. Jellyfin slices are never nil
 // (possibly empty). After a successful Load, media exists as a directory and
-// every jellyfin path entry is non-empty and exists as a directory.
+// every jellyfin path entry is non-empty and exists as a directory. AuthToken
+// is optional; an empty token disables HTTP authentication.
 type Config struct {
 	Media          string
+	AuthToken      string
 	JellyfinMusic  []string
 	JellyfinMovies []string
 	JellyfinTV     []string
@@ -56,6 +59,7 @@ func refineConfig(raw rawConfig) (Config, error) {
 	}
 	return Config{
 		Media:          raw.Media,
+		AuthToken:      raw.AuthToken,
 		JellyfinMusic:  music,
 		JellyfinMovies: movies,
 		JellyfinTV:     tv,

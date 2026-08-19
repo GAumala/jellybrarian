@@ -1,10 +1,12 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"jellybrarian/config"
 	"jellybrarian/media"
@@ -275,8 +277,8 @@ func New(cfg *config.Config) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"title": title,
-			"lang": lang,
-			"path": path,
+			"lang":  lang,
+			"path":  path,
 		})
 	})
 
@@ -336,7 +338,37 @@ func New(cfg *config.Config) http.Handler {
 		})
 	})
 
-	return mux
+	return authenticate(cfg.AuthToken, mux)
+}
+
+func authenticate(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validToken(r, token) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="jellybrarian"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func validToken(r *http.Request, expected string) bool {
+	if expected == "" {
+		return true
+	}
+
+	actual := r.Header.Get("X-Jellybrarian-Token")
+	if actual == "" {
+		auth := r.Header.Get("Authorization")
+		if strings.HasPrefix(auth, "Bearer ") {
+			actual = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+		}
+	}
+	if actual == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
 func writeErrNoVideoFiles(w http.ResponseWriter, nv *media.ErrNoVideoFiles) {
