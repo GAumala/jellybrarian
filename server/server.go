@@ -163,6 +163,34 @@ func New(cfg *config.Config) http.Handler {
 		})
 	})
 
+	mux.HandleFunc("PUT /media/artists/{artist}/delist", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMusic)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		artist := r.PathValue("artist")
+		if artist == "" {
+			http.Error(w, "artist is required", http.StatusBadRequest)
+			return
+		}
+
+		if err := mgr.DelistArtist(artist); err != nil {
+			if errors.Is(err, media.ErrInvalidLibraryTitle) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"artist": artist,
+		})
+	})
+
 	mux.HandleFunc("PUT /media/tv/add", func(w http.ResponseWriter, r *http.Request) {
 		mgr, err := createMediaManager(r, cfg, LibraryTV)
 		if err != nil {

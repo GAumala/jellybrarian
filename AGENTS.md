@@ -149,6 +149,7 @@ Multiple library paths are supported via TOML arrays. The `lib-index` query para
 
 - `media.MediaManager.ListLibraryTitles(q string)` - list subdirectories, optionally filtered by search query
 - `media.MediaManager.resolveLibraryTitleDir(title string)` - resolve `LibraryDir/title`, validates it's a direct child
+- `media.MediaManager.DelistArtist(artist string)` - remove `LibraryDir/artist` from the music library only
 - `media.FindVideoFiles(path string)` - recursively find .mp4/.mkv files
 - `text.NormalizeForSearch(s string)` - accent-insensitive lowercase for search matching
 - `server.queryInt(r *http.Request, key string, defaultVal int)` - parse integer query params

@@ -210,6 +210,12 @@ func (mgr MediaManager) DelistTitle(title string) error {
 	return nil
 }
 
+// DelistArtist removes the music library folder LibraryDir/artist.
+// Files under MediaDir are not deleted. If the folder is already absent, DelistArtist succeeds.
+func (mgr MediaManager) DelistArtist(artist string) error {
+	return mgr.DelistTitle(artist)
+}
+
 // OrganizeArtist finds all directories in the media dir matching "<artist> - <album>"
 // and hard-links their contents into LibraryDir/<artist>/<album>/.
 // Multi-disc albums (subdirectories instead of files) are placed under Disc <N>/.

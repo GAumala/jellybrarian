@@ -79,6 +79,7 @@ Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, d
 | `GET /media/tv/titles` | `jellyfin_tv` |
 | `GET /media/movies/titles` | `jellyfin_movies` |
 | `PUT /media/artists/{artist}/organize` | `jellyfin_music` |
+| `PUT /media/artists/{artist}/delist` | `jellyfin_music` |
 | `PUT /media/tv/add` | `jellyfin_tv` |
 | `PUT /media/tv/delist` | `jellyfin_tv` |
 | `PUT /media/movies/add` | `jellyfin_movies` |
@@ -213,6 +214,32 @@ Response:
 ```
 
 If a destination file already exists, it is removed and replaced by the new hard link.
+
+---
+
+### `PUT /media/artists/{artist}/delist`
+
+Removes the selected artist folder from the music Jellyfin library. Files under the
+media staging directory are not deleted.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `lib-index` | no   | Which `jellyfin_music` path to use (default `0`). |
+
+```bash
+curl -X PUT -H "X-Jellybrarian-Token: $JELLYBRARIAN_TOKEN" http://localhost:8090/media/artists/Radiohead/delist
+```
+
+Response:
+```json
+{
+  "artist": "Radiohead"
+}
+```
+
+If the artist folder is already absent, the request succeeds.
 
 ---
 

@@ -778,6 +778,43 @@ func TestDelistTitle_InvalidTitle(t *testing.T) {
 	}
 }
 
+func TestDelistArtist_RemovesLibraryOnly(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMusic()
+	albumDir := filepath.Join(env.Media, "Radiohead - Kid A")
+	createFile(t, albumDir, "01 - Everything in Its Right Place.flac", "audio")
+	if _, err := mgr.OrganizeArtist("Radiohead"); err != nil {
+		t.Fatalf("OrganizeArtist: %v", err)
+	}
+
+	artistDir := filepath.Join(env.Music, "Radiohead")
+	if _, err := os.Stat(artistDir); err != nil {
+		t.Fatalf("artist dir missing: %v", err)
+	}
+
+	if err := mgr.DelistArtist("Radiohead"); err != nil {
+		t.Fatalf("DelistArtist: %v", err)
+	}
+	if _, err := os.Stat(artistDir); !os.IsNotExist(err) {
+		t.Fatal("expected artist library folder removed")
+	}
+	if _, err := os.Stat(filepath.Join(albumDir, "01 - Everything in Its Right Place.flac")); err != nil {
+		t.Fatalf("media file should remain: %v", err)
+	}
+}
+
+func TestDelistArtist_InvalidArtist(t *testing.T) {
+	env := newTestEnv(t)
+	mgr := env.mgrMusic()
+	err := mgr.DelistArtist("../escape")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrInvalidLibraryTitle) {
+		t.Fatalf("expected ErrInvalidLibraryTitle, got %v", err)
+	}
+}
+
 func TestListTitleFiles_Movies(t *testing.T) {
 	env := newTestEnv(t)
 	mgr := env.mgrMovies()
