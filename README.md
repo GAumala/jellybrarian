@@ -76,8 +76,11 @@ Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, d
 | Endpoint | Uses `jellyfin_*` |
 |----------|-------------------|
 | `GET /media/list` | — (`lib-index` ignored) |
+| `GET /media/files` | — (`lib-index` ignored) |
 | `GET /media/tv/titles` | `jellyfin_tv` |
 | `GET /media/movies/titles` | `jellyfin_movies` |
+| `GET /media/tv/files` | `jellyfin_tv` |
+| `GET /media/movies/files` | `jellyfin_movies` |
 | `PUT /media/artists/{artist}/organize` | `jellyfin_music` |
 | `PUT /media/artists/{artist}/delist` | `jellyfin_music` |
 | `PUT /media/tv/add` | `jellyfin_tv` |
@@ -128,6 +131,28 @@ curl "http://localhost:8090/media/list?limit=20"
 
 ---
 
+### `GET /media/files`
+
+Lists all files recursively under a direct child of the **media** directory.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `title` | yes | Name of a direct child folder under `media`. |
+| `lib-index` | — | Ignored for this route. |
+
+```bash
+curl "http://localhost:8090/media/files?title=Breaking%20Bad"
+```
+
+Response:
+```json
+["/mnt/hdd0/media/Breaking Bad/episode-1.mkv", "/mnt/hdd0/media/Breaking Bad/episode-2.mkv"]
+```
+
+---
+
 ### `GET /media/tv/titles`
 
 Lists TV show titles (immediate subdirectory names under the selected **TV** library path), sorted alphabetically.
@@ -169,6 +194,40 @@ curl "http://localhost:8090/media/movies/titles?q=inception"
 
 ```json
 ["Inception (2010)", "The Lord of the Rings (2001)"]
+```
+
+---
+
+### `GET /media/tv/files`
+
+Lists all files recursively under an existing TV show folder in the selected **TV** Jellyfin library.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `title` | yes | Exact show folder name (a direct child of the selected library path). |
+| `lib-index` | no | Which `jellyfin_tv` path to use (default `0`). |
+
+```bash
+curl "http://localhost:8090/media/tv/files?title=Breaking%20Bad%20(2008)"
+```
+
+---
+
+### `GET /media/movies/files`
+
+Lists all files recursively under an existing movie folder in the selected **movies** Jellyfin library.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `title` | yes | Exact movie folder name (a direct child of the selected library path). |
+| `lib-index` | no | Which `jellyfin_movies` path to use (default `0`). |
+
+```bash
+curl "http://localhost:8090/media/movies/files?title=Inception%20(2010)"
 ```
 
 ---
@@ -257,6 +316,19 @@ season/episode from filenames, and hard-links them into the selected **TV** Jell
 | `title`      | yes     | Jellyfin show title (e.g. `Breaking Bad (2008)`) |
 | `lib-index` | no   | Which `jellyfin_tv` path to use (default `0`). |
 
+The optional request body can provide an explicit JSON `files` map instead of automatic video discovery:
+
+```json
+{
+  "files": {
+    "episode-1.mkv": "Season 1/Breaking Bad (2008) - S01E01.mkv",
+    "episode-2.mkv": "Season 1/Breaking Bad (2008) - S01E02.mkv"
+  }
+}
+```
+
+When provided, each source path is relative to `media-path` and each destination path is relative to the TV library folder named by `title`. Paths may not escape those directories. If omitted or empty, video files are discovered automatically and filenames are parsed for season/episode information.
+
 ```bash
 curl -X PUT "http://localhost:8090/media/tv/add?media-path=Breaking%20Bad&title=Breaking%20Bad%20(2008)"
 curl -X PUT "http://localhost:8090/media/tv/add?media-path=Breaking%20Bad&title=Breaking%20Bad%20(2008)&lib-index=1"
@@ -290,6 +362,19 @@ and hard-links them into the selected **movies** Jellyfin library.
 | `media-path` | yes     | Path under media dir (file or directory, e.g. `Inception.2010.mkv` or `Lord of the Rings`) |
 | `title`      | yes     | Jellyfin movie title (e.g. `Inception (2010)`)   |
 | `lib-index` | no   | Which `jellyfin_movies` path to use (default `0`). |
+
+The optional request body can provide an explicit JSON `files` map instead of automatic file discovery:
+
+```json
+{
+  "files": {
+    "movie.mkv": "Inception (2010).mkv",
+    "audio.es.aac": "Inception (2010).es.aac"
+  }
+}
+```
+
+When provided, each source path is relative to `media-path` and each destination path is relative to the movie library folder named by `title`. Paths may not escape those directories. If omitted or empty, video files and supported audio/subtitle tracks are discovered automatically.
 
 ```bash
 curl -X PUT "http://localhost:8090/media/movies/add?media-path=Inception.2010.mkv&title=Inception%20(2010)"
