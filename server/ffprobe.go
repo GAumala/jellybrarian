@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -26,6 +27,7 @@ func serveFFProbe(w http.ResponseWriter, r *http.Request, root string) {
 	defer cancel()
 	output, err := ffmpeg.Probe(ctx, path)
 	if err != nil {
+		log.Printf("ffprobe failed for %q: %v", path, err)
 		if ctx.Err() != nil {
 			http.Error(w, "ffprobe timed out", http.StatusGatewayTimeout)
 			return

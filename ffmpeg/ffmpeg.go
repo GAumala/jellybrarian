@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"strings"
 )
@@ -38,6 +39,7 @@ func ExtractAudio(ctx context.Context, path string, options AudioOptions, dst io
 	if err != nil {
 		return fmt.Errorf("ffmpeg executable not found: %w", err)
 	}
+	log.Printf("executing ffmpeg: %s", formatCommand(ffmpeg, args))
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 	var stderr bytes.Buffer
 	cmd.Stdout = dst
@@ -49,6 +51,19 @@ func ExtractAudio(ctx context.Context, path string, options AudioOptions, dst io
 		return fmt.Errorf("ffmpeg failed: %w", err)
 	}
 	return nil
+}
+
+func formatCommand(name string, args []string) string {
+	parts := make([]string, 0, len(args)+1)
+	parts = append(parts, shellQuote(name))
+	for _, arg := range args {
+		parts = append(parts, shellQuote(arg))
+	}
+	return strings.Join(parts, " ")
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func audioArgs(path string, options AudioOptions) ([]string, error) {

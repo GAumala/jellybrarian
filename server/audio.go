@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,7 @@ func serveAudio(w http.ResponseWriter, r *http.Request, root string) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", generatedAudioName(path, ext)))
 	if err := ffmpeg.ExtractAudio(r.Context(), path, ffmpeg.AudioOptions{Type: typeName, Stream: stream, Ext: ext}, w); err != nil {
 		// The response may already contain partial audio, so its status cannot be changed here.
+		log.Printf("audio extraction failed for %q: %v", path, err)
 		return
 	}
 }
