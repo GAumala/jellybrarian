@@ -213,6 +213,11 @@ Lists all files recursively under an existing TV show folder in the selected **T
 curl "http://localhost:8090/media/tv/files?title=Breaking%20Bad%20(2008)"
 ```
 
+Response:
+```json
+["/mnt/hdd0/jellyfin/tv/Breaking Bad (2008)/Season 1/Breaking Bad (2008) - S01E01.mkv", "/mnt/hdd0/jellyfin/tv/Breaking Bad (2008)/Season 1/Breaking Bad (2008) - S01E02.mkv"]
+```
+
 ---
 
 ### `GET /media/movies/files`
@@ -228,6 +233,11 @@ Lists all files recursively under an existing movie folder in the selected **mov
 
 ```bash
 curl "http://localhost:8090/media/movies/files?title=Inception%20(2010)"
+```
+
+Response:
+```json
+["/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).mkv", "/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).en.srt"]
 ```
 
 ---
