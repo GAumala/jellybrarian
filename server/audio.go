@@ -1,22 +1,14 @@
 package server
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"path/filepath"
 	"strings"
-)
 
-func ValidateFFmpeg() error {
-	_, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		return fmt.Errorf("ffmpeg executable not found: %w", err)
-	}
-	return nil
-}
+	"jellybrarian/ffmpeg"
+)
 
 func serveAudio(w http.ResponseWriter, r *http.Request, root string) {
 	query := r.URL.Query()
@@ -54,35 +46,11 @@ func serveAudio(w http.ResponseWriter, r *http.Request, root string) {
 		ext = "wav"
 	}
 
-	ffmpeg, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		http.Error(w, "ffmpeg executable not found", http.StatusInternalServerError)
-		return
-	}
-	args := []string{"-nostdin", "-v", "error", "-i", path, "-map", stream}
-	if typeName == "raw" {
-		args = append(args, "-c:a", "copy")
-		if ext == "aac" {
-			args = append(args, "-f", "adts")
-		} else {
-			// MP4 needs fragmented output because stdout is not seekable.
-			args = append(args, "-f", "mp4", "-movflags", "frag_keyframe+empty_moov")
-		}
-	} else {
-		args = append(args, "-ac", "1", "-ar", "22050", "-f", "wav")
-	}
-	args = append(args, "pipe:1")
-
-	cmd := exec.CommandContext(r.Context(), ffmpeg, args...)
-	var stderr bytes.Buffer
-	cmd.Stdout = w
-	cmd.Stderr = &stderr
-
 	w.Header().Set("Content-Type", audioContentType(typeName, ext))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", generatedAudioName(path, ext)))
-	if err := cmd.Run(); err != nil {
+	if err := ffmpeg.ExtractAudio(r.Context(), path, ffmpeg.AudioOptions{Type: typeName, Stream: stream, Ext: ext}, w); err != nil {
 		// The response may already contain partial audio, so its status cannot be changed here.
-		_ = stderr
+		return
 	}
 }
 

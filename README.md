@@ -7,6 +7,8 @@ HTTP server for managing media files and organizing them into Jellyfin library d
 - Go 1.22+
 - All media and Jellyfin directories must be on the **same filesystem** (hard link requirement)
 
+The `ffmpeg` and `ffprobe` executables are optional. The server starts without them, but the audio extraction and media inspection endpoints return an error until the corresponding tools are installed.
+
 ## Build
 
 ```bash
@@ -215,6 +217,8 @@ Extracts one audio stream from a video file under the configured **media** direc
 
 The response is streamed directly from ffmpeg and is not written to the server filesystem. For `raw`, `aac` is written as ADTS and `m4a` as fragmented MP4, both with `-c:a copy`. For `wav`, ffmpeg uses `-ac 1 -ar 22050 -f wav`.
 
+The exact ffmpeg commands used are listed in [Audio Extraction Commands](#audio-extraction-commands). The TV and movie audio endpoints build the same commands against their selected library roots.
+
 ```bash
 curl "http://localhost:8090/media/audio?path=%2Fmnt%2Fhdd0%2Fmedia%2Fmovie.mkv&type=raw&stream=0%3A1&ext=aac" \
   -o movie.aac
@@ -403,6 +407,8 @@ Extracts one audio stream from a video file under the selected **TV** Jellyfin l
 
 The extracted audio is streamed directly to the response.
 
+The exact ffmpeg commands used are listed in [Audio Extraction Commands](#audio-extraction-commands).
+
 ---
 
 ### `GET /media/movies/audio`
@@ -420,6 +426,8 @@ Extracts one audio stream from a video file under the selected **movies** Jellyf
 | `lib-index` | no | Which `jellyfin_movies` path to use (default `0`). |
 
 The extracted audio is streamed directly to the response.
+
+The exact ffmpeg commands used are listed in [Audio Extraction Commands](#audio-extraction-commands).
 
 ---
 
@@ -667,6 +675,31 @@ Response:
 
 ---
 
+## Audio Extraction Commands
+
+The audio endpoints execute ffmpeg directly, without a shell. `$path` is the validated absolute input path and `$stream` is the requested stream map. Output is always written to stdout through `pipe:1`; `out` is not a request parameter and no output file is created on the server.
+
+For `type=raw&ext=aac`:
+```text
+ffmpeg -nostdin -v error -i "$path" -map "$stream" -c:a copy -f adts pipe:1
+```
+
+For `type=raw&ext=m4a`:
+```text
+ffmpeg -nostdin -v error -i "$path" -map "$stream" -c:a copy -f mp4 -movflags frag_keyframe+empty_moov pipe:1
+```
+
+The fragmented MP4 flags are required because stdout is not seekable.
+
+For `type=wav`:
+```text
+ffmpeg -nostdin -v error -i "$path" -map "$stream" -ac 1 -ar 22050 -f wav pipe:1
+```
+
+These commands are identical for `GET /media/audio`, `GET /media/tv/audio`, and `GET /media/movies/audio`; only the validated root for `$path` differs.
+
+---
+
 ## Deploy with Docker
 
 Edit `config.toml` with your actual paths, then on the Pi:
@@ -701,6 +734,8 @@ jellybrarian/
 ├── media/
 │   ├── media.go         # MediaManager: listing and hard-link organization
 │   └── media_test.go    # tests
+├── ffmpeg/
+│   └── ffmpeg.go        # ffmpeg and ffprobe subprocess operations
 ├── server/
 │   ├── server.go        # HTTP route definitions
 │   ├── library.go       # LibraryKind, createMediaManager, lib-index resolution
