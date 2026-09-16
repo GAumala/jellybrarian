@@ -1,3 +1,4 @@
 *.swp
 jellybrarian
 config.toml
+.DS_Store
