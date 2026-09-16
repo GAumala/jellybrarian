@@ -77,10 +77,19 @@ Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, d
 |----------|-------------------|
 | `GET /media/list` | — (`lib-index` ignored) |
 | `GET /media/files` | — (`lib-index` ignored) |
+| `GET /media/file` | — (`lib-index` ignored) |
+| `GET /media/ffprobe` | — (`lib-index` ignored) |
+| `GET /media/audio` | — (`lib-index` ignored) |
 | `GET /media/tv/titles` | `jellyfin_tv` |
 | `GET /media/movies/titles` | `jellyfin_movies` |
 | `GET /media/tv/files` | `jellyfin_tv` |
 | `GET /media/movies/files` | `jellyfin_movies` |
+| `GET /media/tv/file` | `jellyfin_tv` |
+| `GET /media/movies/file` | `jellyfin_movies` |
+| `GET /media/tv/ffprobe` | `jellyfin_tv` |
+| `GET /media/movies/ffprobe` | `jellyfin_movies` |
+| `GET /media/tv/audio` | `jellyfin_tv` |
+| `GET /media/movies/audio` | `jellyfin_movies` |
 | `PUT /media/artists/{artist}/organize` | `jellyfin_music` |
 | `PUT /media/artists/{artist}/delist` | `jellyfin_music` |
 | `PUT /media/tv/add` | `jellyfin_tv` |
@@ -149,6 +158,68 @@ curl "http://localhost:8090/media/files?title=Breaking%20Bad"
 Response:
 ```json
 ["/mnt/hdd0/media/Breaking Bad/episode-1.mkv", "/mnt/hdd0/media/Breaking Bad/episode-2.mkv"]
+```
+
+---
+
+### `GET /media/file`
+
+Fetches one file from the **media** directory for inspection. The `path` value should be an absolute path returned by `GET /media/files` and must refer to a file under the configured `media` root.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the configured `media` directory. |
+| `lib-index` | — | Ignored for this route. |
+
+The response body is the raw file contents. The endpoint supports normal HTTP content-type detection and range requests.
+
+```bash
+curl "http://localhost:8090/media/file?path=%2Fmnt%2Fhdd0%2Fmedia%2FBreaking%20Bad%2Fepisode-1.mkv" \
+  -o episode-1.mkv
+```
+
+---
+
+### `GET /media/ffprobe`
+
+Returns `ffprobe` metadata for one file under the configured **media** directory as JSON. The `path` value should be an absolute path returned by `GET /media/files`.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the configured `media` directory. |
+| `lib-index` | — | Ignored for this route. |
+
+```bash
+curl "http://localhost:8090/media/ffprobe?path=%2Fmnt%2Fhdd0%2Fmedia%2FBreaking%20Bad%2Fepisode-1.mkv"
+```
+
+---
+
+### `GET /media/audio`
+
+Extracts one audio stream from a video file under the configured **media** directory and streams it in the response. The `path` value should be an absolute path returned by `GET /media/files`.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute video file path under the configured `media` directory. |
+| `type` | yes | `raw` to copy the stream without re-encoding, or `wav` to convert it to mono 22050 Hz WAV. |
+| `stream` | yes | ffmpeg stream map, such as `0:1` or `0:a:1`. |
+| `ext` | raw only | Output extension: `aac` or `m4a`. |
+| `lib-index` | — | Ignored for this route. |
+
+The response is streamed directly from ffmpeg and is not written to the server filesystem. For `raw`, `aac` is written as ADTS and `m4a` as fragmented MP4, both with `-c:a copy`. For `wav`, ffmpeg uses `-ac 1 -ar 22050 -f wav`.
+
+```bash
+curl "http://localhost:8090/media/audio?path=%2Fmnt%2Fhdd0%2Fmedia%2Fmovie.mkv&type=raw&stream=0%3A1&ext=aac" \
+  -o movie.aac
+curl "http://localhost:8090/media/audio?path=%2Fmnt%2Fhdd0%2Fmedia%2Fmovie.mkv&type=wav&stream=0%3A1" \
+  -o movie.wav
 ```
 
 ---
@@ -239,6 +310,116 @@ Response:
 ```json
 ["/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).mkv", "/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).en.srt"]
 ```
+
+---
+
+### `GET /media/tv/file`
+
+Fetches one file from the selected **TV** Jellyfin library for inspection. The `path` value should be an absolute path returned by `GET /media/tv/files` and must refer to a file under the selected `jellyfin_tv` root.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the selected TV library. |
+| `lib-index` | no | Which `jellyfin_tv` path to use (default `0`). |
+
+The response body is the raw file contents.
+
+```bash
+curl "http://localhost:8090/media/tv/file?path=%2Fmnt%2Fhdd0%2Fjellyfin%2Ftv%2FBreaking%20Bad%20(2008)%2FSeason%201%2FBreaking%20Bad%20(2008)%20-%20S01E01.mkv" \
+  -o episode-1.mkv
+```
+
+---
+
+### `GET /media/movies/file`
+
+Fetches one file from the selected **movies** Jellyfin library for inspection. The `path` value should be an absolute path returned by `GET /media/movies/files` and must refer to a file under the selected `jellyfin_movies` root.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the selected movies library. |
+| `lib-index` | no | Which `jellyfin_movies` path to use (default `0`). |
+
+The response body is the raw file contents.
+
+```bash
+curl "http://localhost:8090/media/movies/file?path=%2Fmnt%2Fhdd0%2Fjellyfin%2Fmovies%2FInception%20(2010)%2FInception%20(2010).mkv" \
+  -o Inception.mkv
+```
+
+---
+
+### `GET /media/tv/ffprobe`
+
+Returns `ffprobe` metadata for one file under the selected **TV** Jellyfin library as JSON. The `path` value should be an absolute path returned by `GET /media/tv/files`.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the selected TV library. |
+| `lib-index` | no | Which `jellyfin_tv` path to use (default `0`). |
+
+```bash
+curl "http://localhost:8090/media/tv/ffprobe?path=%2Fmnt%2Fhdd0%2Fjellyfin%2Ftv%2FBreaking%20Bad%20(2008)%2FSeason%201%2FBreaking%20Bad%20(2008)%20-%20S01E01.mkv"
+```
+
+---
+
+### `GET /media/movies/ffprobe`
+
+Returns `ffprobe` metadata for one file under the selected **movies** Jellyfin library as JSON. The `path` value should be an absolute path returned by `GET /media/movies/files`.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the selected movies library. |
+| `lib-index` | no | Which `jellyfin_movies` path to use (default `0`). |
+
+```bash
+curl "http://localhost:8090/media/movies/ffprobe?path=%2Fmnt%2Fhdd0%2Fjellyfin%2Fmovies%2FInception%20(2010)%2FInception%20(2010).mkv"
+```
+
+---
+
+### `GET /media/tv/audio`
+
+Extracts one audio stream from a video file under the selected **TV** Jellyfin library. It uses the same `path`, `type`, `stream`, and raw-only `ext` parameters as `GET /media/audio`; `path` must be under the selected `jellyfin_tv` root.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute video file path under the selected TV library. |
+| `type` | yes | `raw` or `wav`. |
+| `stream` | yes | ffmpeg stream map, such as `0:1` or `0:a:1`. |
+| `ext` | raw only | Output extension: `aac` or `m4a`. |
+| `lib-index` | no | Which `jellyfin_tv` path to use (default `0`). |
+
+The extracted audio is streamed directly to the response.
+
+---
+
+### `GET /media/movies/audio`
+
+Extracts one audio stream from a video file under the selected **movies** Jellyfin library. It uses the same `path`, `type`, `stream`, and raw-only `ext` parameters as `GET /media/audio`; `path` must be under the selected `jellyfin_movies` root.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute video file path under the selected movies library. |
+| `type` | yes | `raw` or `wav`. |
+| `stream` | yes | ffmpeg stream map, such as `0:1` or `0:a:1`. |
+| `ext` | raw only | Output extension: `aac` or `m4a`. |
+| `lib-index` | no | Which `jellyfin_movies` path to use (default `0`). |
+
+The extracted audio is streamed directly to the response.
 
 ---
 

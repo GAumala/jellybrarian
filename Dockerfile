@@ -11,6 +11,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /jellybrarian .
 
 FROM alpine:3.21
 
+RUN apk add --no-cache ffmpeg
 RUN adduser -D -u 1000 jellybrarian
 
 USER jellybrarian

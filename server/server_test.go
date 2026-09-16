@@ -1,10 +1,13 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"jellybrarian/config"
@@ -85,6 +88,176 @@ func TestDelistArtistEndpoint(t *testing.T) {
 	}
 	if _, err := os.Stat(artistDir); !os.IsNotExist(err) {
 		t.Fatal("expected artist library folder removed")
+	}
+}
+
+func TestServeScopedFile(t *testing.T) {
+	cfg := testConfig(t)
+	for _, dir := range []string{filepath.Join(filepath.Dir(cfg.Media), "movies"), filepath.Join(filepath.Dir(cfg.Media), "tv")} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("failed to create library dir: %v", err)
+		}
+	}
+	cfg.JellyfinMovies = []string{filepath.Join(filepath.Dir(cfg.Media), "movies")}
+	cfg.JellyfinTV = []string{filepath.Join(filepath.Dir(cfg.Media), "tv")}
+
+	tests := []struct {
+		name  string
+		route string
+		root  string
+	}{
+		{name: "media", route: "/media/file", root: cfg.Media},
+		{name: "movies", route: "/media/movies/file", root: cfg.JellyfinMovies[0]},
+		{name: "tv", route: "/media/tv/file", root: cfg.JellyfinTV[0]},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(tt.root, "inspect.txt")
+			if err := os.WriteFile(path, []byte("inspect me"), 0644); err != nil {
+				t.Fatalf("failed to write test file: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodGet, tt.route+"?path="+url.QueryEscape(path), nil)
+			req.Header.Set("X-Jellybrarian-Token", "test-secret")
+			resp := httptest.NewRecorder()
+
+			New(cfg).ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d: %s", http.StatusOK, resp.Code, resp.Body.String())
+			}
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("failed to read response: %v", err)
+			}
+			if string(body) != "inspect me" {
+				t.Fatalf("expected file contents, got %q", body)
+			}
+		})
+	}
+}
+
+func TestServeScopedFileRejectsOutsidePath(t *testing.T) {
+	cfg := testConfig(t)
+	outside := filepath.Join(filepath.Dir(cfg.Media), "outside.txt")
+	if err := os.WriteFile(outside, []byte("secret"), 0644); err != nil {
+		t.Fatalf("failed to write outside file: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/media/file?path="+url.QueryEscape(outside), nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.Code)
+	}
+	if strings.Contains(resp.Body.String(), "secret") {
+		t.Fatal("outside file contents were served")
+	}
+}
+
+func TestServeFFProbe(t *testing.T) {
+	cfg := testConfig(t)
+	path := filepath.Join(cfg.Media, "inspect.mkv")
+	if err := os.WriteFile(path, []byte("not a real media file"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	binDir := t.TempDir()
+	ffprobe := filepath.Join(binDir, "ffprobe")
+	script := "#!/bin/sh\nprintf '%s' '{\"streams\":[],\"format\":{\"filename\":\"inspect.mkv\"}}'\n"
+	if err := os.WriteFile(ffprobe, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake ffprobe: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/media/ffprobe?path="+url.QueryEscape(path), nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	if got := resp.Body.String(); got != "{\"streams\":[],\"format\":{\"filename\":\"inspect.mkv\"}}" {
+		t.Fatalf("unexpected ffprobe output: %q", got)
+	}
+}
+
+func TestServeAudio(t *testing.T) {
+	cfg := testConfig(t)
+	path := filepath.Join(cfg.Media, "inspect.mkv")
+	if err := os.WriteFile(path, []byte("video"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	binDir := t.TempDir()
+	argsPath := filepath.Join(binDir, "args")
+	ffmpeg := filepath.Join(binDir, "ffmpeg")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + argsPath + "'\nprintf '%s' 'audio data'\n"
+	if err := os.WriteFile(ffmpeg, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake ffmpeg: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/media/audio?path="+url.QueryEscape(path)+"&type=raw&stream=0%3A1&ext=aac", nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	if resp.Body.String() != "audio data" {
+		t.Fatalf("unexpected audio output: %q", resp.Body.String())
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("failed to read ffmpeg args: %v", err)
+	}
+	for _, expected := range []string{"-map\n0:1\n", "-c:a\ncopy\n", "-f\nadts\n", "pipe:1\n"} {
+		if !strings.Contains(string(args), expected) {
+			t.Errorf("ffmpeg args missing %q: %s", expected, args)
+		}
+	}
+}
+
+func TestServeAudioRequiresRawExtension(t *testing.T) {
+	cfg := testConfig(t)
+	path := filepath.Join(cfg.Media, "inspect.mkv")
+	if err := os.WriteFile(path, []byte("video"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/media/audio?path="+url.QueryEscape(path)+"&type=raw&stream=0%3A1", nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.Code)
+	}
+}
+
+func TestServeAudioRejectsUnknownRawExtension(t *testing.T) {
+	cfg := testConfig(t)
+	path := filepath.Join(cfg.Media, "inspect.mkv")
+	if err := os.WriteFile(path, []byte("video"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/media/audio?path="+url.QueryEscape(path)+"&type=raw&stream=0%3A1&ext=mp3", nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.Code)
 	}
 }
 

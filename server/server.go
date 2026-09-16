@@ -49,6 +49,18 @@ func New(cfg *config.Config) http.Handler {
 		json.NewEncoder(w).Encode(files)
 	})
 
+	mux.HandleFunc("GET /media/file", func(w http.ResponseWriter, r *http.Request) {
+		serveScopedFile(w, r, cfg.Media)
+	})
+
+	mux.HandleFunc("GET /media/ffprobe", func(w http.ResponseWriter, r *http.Request) {
+		serveFFProbe(w, r, cfg.Media)
+	})
+
+	mux.HandleFunc("GET /media/audio", func(w http.ResponseWriter, r *http.Request) {
+		serveAudio(w, r, cfg.Media)
+	})
+
 	mux.HandleFunc("GET /media/tv/titles", func(w http.ResponseWriter, r *http.Request) {
 		mgr, err := createMediaManager(r, cfg, LibraryTV)
 		if err != nil {
@@ -110,6 +122,33 @@ func New(cfg *config.Config) http.Handler {
 		json.NewEncoder(w).Encode(files)
 	})
 
+	mux.HandleFunc("GET /media/movies/file", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveScopedFile(w, r, mgr.LibraryDir)
+	})
+
+	mux.HandleFunc("GET /media/movies/ffprobe", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveFFProbe(w, r, mgr.LibraryDir)
+	})
+
+	mux.HandleFunc("GET /media/movies/audio", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveAudio(w, r, mgr.LibraryDir)
+	})
+
 	mux.HandleFunc("GET /media/tv/files", func(w http.ResponseWriter, r *http.Request) {
 		mgr, err := createMediaManager(r, cfg, LibraryTV)
 		if err != nil {
@@ -135,6 +174,33 @@ func New(cfg *config.Config) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(files)
+	})
+
+	mux.HandleFunc("GET /media/tv/file", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveScopedFile(w, r, mgr.LibraryDir)
+	})
+
+	mux.HandleFunc("GET /media/tv/ffprobe", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveFFProbe(w, r, mgr.LibraryDir)
+	})
+
+	mux.HandleFunc("GET /media/tv/audio", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveAudio(w, r, mgr.LibraryDir)
 	})
 
 	mux.HandleFunc("PUT /media/artists/{artist}/organize", func(w http.ResponseWriter, r *http.Request) {

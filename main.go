@@ -18,6 +18,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := server.ValidateFFProbe(); err != nil {
+		log.Fatal(err)
+	}
+	if err := server.ValidateFFmpeg(); err != nil {
+		log.Fatal(err)
+	}
 
 	log.Printf("media dir: %s", cfg.Media)
 	log.Printf("jellyfin music:  %v", cfg.JellyfinMusic)
