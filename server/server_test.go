@@ -157,6 +157,94 @@ func TestServeScopedFileRejectsOutsidePath(t *testing.T) {
 	}
 }
 
+func TestUploadScopedFile(t *testing.T) {
+	cfg := testConfig(t)
+	targetDir := filepath.Join(cfg.Media, "uploads")
+	if err := os.Mkdir(targetDir, 0755); err != nil {
+		t.Fatalf("failed to create upload directory: %v", err)
+	}
+	target := filepath.Join(targetDir, "movie.mkv")
+	req := httptest.NewRequest(http.MethodPut, "/media/file?path="+url.QueryEscape(target), strings.NewReader("video data"))
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, resp.Code, resp.Body.String())
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("failed to read uploaded file: %v", err)
+	}
+	if string(contents) != "video data" {
+		t.Fatalf("expected uploaded contents, got %q", contents)
+	}
+}
+
+func TestUploadScopedFileRejectsOutsidePath(t *testing.T) {
+	cfg := testConfig(t)
+	target := filepath.Join(filepath.Dir(cfg.Media), "outside.mkv")
+	req := httptest.NewRequest(http.MethodPut, "/media/file?path="+url.QueryEscape(target), strings.NewReader("video data"))
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, resp.Code, resp.Body.String())
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("expected outside target not to be created")
+	}
+}
+
+func TestUploadScopedFileDoesNotOverwrite(t *testing.T) {
+	cfg := testConfig(t)
+	target := filepath.Join(cfg.Media, "existing.mkv")
+	if err := os.WriteFile(target, []byte("original"), 0644); err != nil {
+		t.Fatalf("failed to create existing file: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/media/file?path="+url.QueryEscape(target), strings.NewReader("replacement"))
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, resp.Code, resp.Body.String())
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("failed to read existing file: %v", err)
+	}
+	if string(contents) != "original" {
+		t.Fatalf("existing file was overwritten with %q", contents)
+	}
+}
+
+func TestUploadScopedFileRejectsSymlinkOutsidePath(t *testing.T) {
+	cfg := testConfig(t)
+	outside := t.TempDir()
+	link := filepath.Join(cfg.Media, "outside-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+	target := filepath.Join(link, "escaped.mkv")
+	req := httptest.NewRequest(http.MethodPut, "/media/file?path="+url.QueryEscape(target), strings.NewReader("video data"))
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, resp.Code, resp.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(outside, "escaped.mkv")); !os.IsNotExist(err) {
+		t.Fatal("expected symlinked outside target not to be created")
+	}
+}
+
 func TestServeFFProbe(t *testing.T) {
 	cfg := testConfig(t)
 	path := filepath.Join(cfg.Media, "inspect.mkv")

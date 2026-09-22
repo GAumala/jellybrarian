@@ -53,6 +53,10 @@ func New(cfg *config.Config) http.Handler {
 		serveScopedFile(w, r, cfg.Media)
 	})
 
+	mux.HandleFunc("PUT /media/file", func(w http.ResponseWriter, r *http.Request) {
+		uploadScopedFile(w, r, cfg.Media)
+	})
+
 	mux.HandleFunc("GET /media/ffprobe", func(w http.ResponseWriter, r *http.Request) {
 		serveFFProbe(w, r, cfg.Media)
 	})

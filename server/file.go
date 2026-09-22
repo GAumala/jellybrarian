@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ var (
 	errFileNotFound     = errors.New("file not found")
 	errFileIsNotRegular = errors.New("path must refer to a file")
 	errFileOutsideRoot  = errors.New("path is outside the configured library")
+	errFileExists       = errors.New("file already exists")
 )
 
 func resolveScopedFile(path, root string) (string, os.FileInfo, error) {
@@ -72,4 +74,65 @@ func serveScopedFile(w http.ResponseWriter, r *http.Request, root string) {
 	}
 	defer file.Close()
 	http.ServeContent(w, r, filepath.Base(path), info.ModTime(), file)
+}
+
+func resolveScopedUploadPath(path, root string) (string, error) {
+	if path == "" {
+		return "", errFilePathRequired
+	}
+	if !filepath.IsAbs(path) {
+		return "", errFilePathRelative
+	}
+
+	path = filepath.Clean(path)
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve file root: %w", err)
+	}
+	resolvedParent, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolvedParent)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", errFileOutsideRoot
+	}
+
+	return filepath.Join(resolvedParent, filepath.Base(path)), nil
+}
+
+func uploadScopedFile(w http.ResponseWriter, r *http.Request, root string) {
+	path, err := resolveScopedUploadPath(r.URL.Query().Get("path"), root)
+	if err != nil {
+		if errors.Is(err, errFilePathRequired) || errors.Is(err, errFilePathRelative) || errors.Is(err, errFileOutsideRoot) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			http.Error(w, errFileExists.Error(), http.StatusConflict)
+		} else {
+			http.Error(w, fmt.Sprintf("failed to create file: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if _, err := io.Copy(file, r.Body); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		http.Error(w, fmt.Sprintf("failed to write file: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		http.Error(w, fmt.Sprintf("failed to close file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
 }
