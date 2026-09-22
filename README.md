@@ -80,6 +80,8 @@ Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, d
 | `GET /media/list` | — (`lib-index` ignored) |
 | `GET /media/files` | — (`lib-index` ignored) |
 | `GET /media/file` | — (`lib-index` ignored) |
+| `PUT /media/file` | — (`lib-index` ignored) |
+| `DELETE /media/file` | — (`lib-index` ignored) |
 | `GET /media/ffprobe` | — (`lib-index` ignored) |
 | `GET /media/audio` | — (`lib-index` ignored) |
 | `GET /media/tv/titles` | `jellyfin_tv` |
@@ -180,6 +182,45 @@ The response body is the raw file contents. The endpoint supports normal HTTP co
 ```bash
 curl "http://localhost:8090/media/file?path=%2Fmnt%2Fhdd0%2Fmedia%2FBreaking%20Bad%2Fepisode-1.mkv" \
   -o episode-1.mkv
+```
+
+---
+
+### `PUT /media/file`
+
+Uploads a file to the **media** directory. The target directory must already exist, and the target path must be an absolute path within the configured `media` root. Existing files are never overwritten.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute target file path under the configured `media` directory. |
+| `lib-index` | — | Ignored for this route. |
+
+The request body is written as the raw file contents. The endpoint returns **201 Created** on success and **409 Conflict** if the target file already exists.
+
+```bash
+curl -X PUT "http://localhost:8090/media/file?path=%2Fmnt%2Fhdd0%2Fmedia%2FBreaking%20Bad%2Fepisode-1.mkv" \
+  --data-binary @episode-1.mkv
+```
+
+---
+
+### `DELETE /media/file`
+
+Deletes one regular file from the **media** directory. The target path must be an absolute path within the configured `media` root.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute file path under the configured `media` directory. |
+| `lib-index` | — | Ignored for this route. |
+
+The endpoint returns **204 No Content** on success, **404 Not Found** if the file does not exist, and **400 Bad Request** for directories or paths outside the media root.
+
+```bash
+curl -X DELETE "http://localhost:8090/media/file?path=%2Fmnt%2Fhdd0%2Fmedia%2FBreaking%20Bad%2Fepisode-1.mkv"
 ```
 
 ---
