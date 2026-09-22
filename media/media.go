@@ -41,8 +41,9 @@ type MediaManager struct {
 }
 
 // ListMedia returns entries in the media dir sorted by modification time ascending (oldest first).
-// If limit > 0, only the most recent limit entries are returned.
-func (mgr MediaManager) ListMedia(limit int) ([]string, error) {
+// If q is non-empty, only entries matching all query keywords are returned and limit is ignored.
+// If q is empty and limit > 0, only the most recent limit entries are returned.
+func (mgr MediaManager) ListMedia(q string, limit int) ([]string, error) {
 	entries, err := os.ReadDir(mgr.MediaDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dir: %w", err)
@@ -70,8 +71,9 @@ func (mgr MediaManager) ListMedia(limit int) ([]string, error) {
 	for i, item := range items {
 		names[i] = item.name
 	}
+	names = filterTitlesByQuery(names, q)
 
-	if limit > 0 && limit < len(names) {
+	if strings.TrimSpace(q) == "" && limit > 0 && limit < len(names) {
 		names = names[len(names)-limit:]
 	}
 
@@ -117,6 +119,36 @@ func listJellyfinDirNames(path string) ([]string, error) {
 	return names, nil
 }
 
+func listJellyfinDirNamesByModTime(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read dir %q: %w", path, err)
+	}
+	type entry struct {
+		name    string
+		modTime int64
+	}
+	var dirs []entry
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		dirs = append(dirs, entry{name: e.Name(), modTime: info.ModTime().UnixNano()})
+	}
+	sort.Slice(dirs, func(i, j int) bool {
+		return dirs[i].modTime < dirs[j].modTime
+	})
+	names := make([]string, len(dirs))
+	for i, dir := range dirs {
+		names[i] = dir.name
+	}
+	return names, nil
+}
+
 // filterTitlesByQuery returns titles that match all space-separated keywords in q.
 // Matching is case-insensitive and accent-insensitive. If q is empty, all titles are returned.
 func filterTitlesByQuery(titles []string, q string) []string {
@@ -146,14 +178,28 @@ func filterTitlesByQuery(titles []string, q string) []string {
 	return out
 }
 
-// ListLibraryTitles returns subdirectory names under the selected library dir (movies or TV).
-// If q is non-empty, results are filtered by keyword search (case and accent insensitive).
-func (mgr MediaManager) ListLibraryTitles(q string) ([]string, error) {
+// ListLibraryTitles returns subdirectory names under the selected library dir (movies or TV),
+// sorted alphabetically. If q is non-empty, results are filtered by keyword search (case and
+// accent insensitive) and limit is ignored. If q is empty and limit > 0, only the most recently
+// modified limit titles are returned, sorted oldest to newest.
+func (mgr MediaManager) ListLibraryTitles(q string, limit int) ([]string, error) {
+	if strings.TrimSpace(q) == "" && limit > 0 {
+		names, err := listJellyfinDirNamesByModTime(mgr.LibraryDir)
+		if err != nil {
+			return nil, err
+		}
+		if limit < len(names) {
+			names = names[len(names)-limit:]
+		}
+		return names, nil
+	}
+
 	names, err := listJellyfinDirNames(mgr.LibraryDir)
 	if err != nil {
 		return nil, err
 	}
-	return filterTitlesByQuery(names, q), nil
+	names = filterTitlesByQuery(names, q)
+	return names, nil
 }
 
 // resolveLibraryTitleDir returns filepath.Join(LibraryDir, title) after validating that the path is

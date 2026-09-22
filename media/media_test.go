@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // testEnv is a temp tree with media + three jellyfin library roots.
@@ -59,7 +60,7 @@ func TestListMedia_Empty(t *testing.T) {
 	env := newTestEnv(t)
 	mgr := env.mgrMusic()
 
-	names, err := mgr.ListMedia(0)
+	names, err := mgr.ListMedia("", 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestListMedia_ReturnsEntries(t *testing.T) {
 	os.Mkdir(filepath.Join(env.Media, "Artist - Album"), 0755)
 	os.WriteFile(filepath.Join(env.Media, "random.txt"), []byte("hi"), 0644)
 
-	names, err := env.mgrMusic().ListMedia(0)
+	names, err := env.mgrMusic().ListMedia("", 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -91,6 +92,31 @@ func TestListMedia_ReturnsEntries(t *testing.T) {
 		if !found[want] {
 			t.Errorf("expected %q in list, got %v", want, names)
 		}
+	}
+}
+
+func TestListMedia_QueryTakesPriorityOverLimit(t *testing.T) {
+	env := newTestEnv(t)
+	for i, name := range []string{"The Matrix", "The Matrix Reloaded", "Inception"} {
+		path := filepath.Join(env.Media, name)
+		if err := os.Mkdir(path, 0755); err != nil {
+			t.Fatalf("failed to create media entry %q: %v", name, err)
+		}
+		modified := time.Unix(0, int64(i+1))
+		if err := os.Chtimes(path, modified, modified); err != nil {
+			t.Fatalf("failed to set modification time for %q: %v", name, err)
+		}
+	}
+
+	names, err := env.mgrMusic().ListMedia("matrix", 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected both matching entries when q is set, got %v", names)
+	}
+	if names[0] != "The Matrix" || names[1] != "The Matrix Reloaded" {
+		t.Fatalf("unexpected matching entries: %v", names)
 	}
 }
 
@@ -240,7 +266,7 @@ func TestListLibraryTitles_TV(t *testing.T) {
 	env := newTestEnv(t)
 	mgr := env.mgrTV()
 
-	names, err := mgr.ListLibraryTitles("")
+	names, err := mgr.ListLibraryTitles("", 0)
 	if err != nil {
 		t.Fatalf("ListLibraryTitles: %v", err)
 	}
@@ -248,11 +274,18 @@ func TestListLibraryTitles_TV(t *testing.T) {
 		t.Fatalf("expected no titles, got %v", names)
 	}
 
-	os.Mkdir(filepath.Join(env.TV, "Breaking Bad (2008)"), 0755)
-	os.Mkdir(filepath.Join(env.TV, "Succession"), 0755)
-	os.Mkdir(filepath.Join(env.TV, "ONE PIECE (2023)"), 0755)
+	for i, title := range []string{"Breaking Bad (2008)", "Succession", "ONE PIECE (2023)"} {
+		path := filepath.Join(env.TV, title)
+		if err := os.Mkdir(path, 0755); err != nil {
+			t.Fatalf("failed to create title directory: %v", err)
+		}
+		modified := time.Unix(0, int64(i+1))
+		if err := os.Chtimes(path, modified, modified); err != nil {
+			t.Fatalf("failed to set title modification time: %v", err)
+		}
+	}
 
-	names, err = mgr.ListLibraryTitles("")
+	names, err = mgr.ListLibraryTitles("", 0)
 	if err != nil {
 		t.Fatalf("ListLibraryTitles: %v", err)
 	}
@@ -265,13 +298,29 @@ func TestListLibraryTitles_TV(t *testing.T) {
 			t.Errorf("names[%d] = %q, want %q (order should be sorted)", i, names[i], w)
 		}
 	}
+
+	names, err = mgr.ListLibraryTitles("", 2)
+	if err != nil {
+		t.Fatalf("ListLibraryTitles with limit: %v", err)
+	}
+	if len(names) != 2 || names[0] != "Succession" || names[1] != "ONE PIECE (2023)" {
+		t.Fatalf("unexpected limited titles: %v", names)
+	}
+
+	names, err = mgr.ListLibraryTitles("e", 1)
+	if err != nil {
+		t.Fatalf("ListLibraryTitles with query: %v", err)
+	}
+	if len(names) != 3 {
+		t.Fatalf("expected query to take priority over limit, got %v", names)
+	}
 }
 
 func TestListLibraryTitles_Movies(t *testing.T) {
 	env := newTestEnv(t)
 	mgr := env.mgrMovies()
 
-	names, err := mgr.ListLibraryTitles("")
+	names, err := mgr.ListLibraryTitles("", 0)
 	if err != nil {
 		t.Fatalf("ListLibraryTitles: %v", err)
 	}
@@ -282,7 +331,7 @@ func TestListLibraryTitles_Movies(t *testing.T) {
 	os.Mkdir(filepath.Join(env.Movies, "Inception (2010)"), 0755)
 	os.Mkdir(filepath.Join(env.Movies, "The Lord of the Rings (2001)"), 0755)
 
-	names, err = mgr.ListLibraryTitles("")
+	names, err = mgr.ListLibraryTitles("", 0)
 	if err != nil {
 		t.Fatalf("ListLibraryTitles: %v", err)
 	}

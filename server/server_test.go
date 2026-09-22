@@ -69,6 +69,28 @@ func TestAuthDisabledWithoutConfiguredToken(t *testing.T) {
 	}
 }
 
+func TestListMediaQuery(t *testing.T) {
+	cfg := testConfig(t)
+	for _, name := range []string{"The Matrix", "Inception"} {
+		if err := os.Mkdir(filepath.Join(cfg.Media, name), 0755); err != nil {
+			t.Fatalf("failed to create media entry %q: %v", name, err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/media/list?q=matrix", nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	if got := resp.Body.String(); !strings.Contains(got, `"The Matrix"`) || strings.Contains(got, "Inception") {
+		t.Fatalf("unexpected filtered response: %s", got)
+	}
+}
+
 func TestDelistArtistEndpoint(t *testing.T) {
 	cfg := testConfig(t)
 	artistDir := filepath.Join(cfg.JellyfinMusic[0], "Radiohead")

@@ -123,18 +123,20 @@ Flags:
 
 ### `GET /media/list`
 
-Lists entries in the **media** directory (`media` in config), sorted oldest → newest (newest at the bottom).
+Lists entries in the **media** directory (`media` in config), sorted oldest → newest (newest at the bottom). Results can be filtered by keyword.
 Useful for spotting recently added files that still need to be organized into Jellyfin.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `limit`   | no       | If `> 0`, only the **most recent** `limit` entries are returned (after sorting). Default `0` means no limit. |
+| `q`       | no       | Filter by space-separated keywords, case- and accent-insensitive. All keywords must appear in the entry name. When set, `q` takes precedence and `limit` is ignored. |
+| `limit`   | no       | If `> 0` and `q` is not set, only the **most recent** `limit` entries are returned (after sorting). Default `0` means no limit. |
 | `lib-index` | —      | Ignored for this route. |
 
 ```bash
 curl http://localhost:8090/media/list
+curl "http://localhost:8090/media/list?q=matrix"
 curl "http://localhost:8090/media/list?limit=20"
 ```
 
@@ -278,11 +280,13 @@ Lists TV show titles (immediate subdirectory names under the selected **TV** lib
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `q`       | no       | Filter by keywords: case- and accent-insensitive. All space-separated terms must appear in the title (e.g. `one piece` matches "ONE PIECE (2023)"). |
+| `limit`   | no       | If `> 0` and `q` is not set, return only the most recently modified `limit` titles, sorted oldest to newest. When `q` is set, `limit` is ignored. |
 | `lib-index` | no   | Which `jellyfin_tv` path to use (default `0`). |
 
 ```bash
 curl http://localhost:8090/media/tv/titles
 curl "http://localhost:8090/media/tv/titles?q=one%20piece"
+curl "http://localhost:8090/media/tv/titles?limit=20"
 curl "http://localhost:8090/media/tv/titles?lib-index=1"
 ```
 
@@ -301,11 +305,13 @@ Lists movie titles (immediate subdirectory names under the selected **movies** l
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `q`       | no       | Filter by keywords: case- and accent-insensitive. All space-separated terms must appear in the title. |
+| `limit`   | no       | If `> 0` and `q` is not set, return only the most recently modified `limit` titles, sorted oldest to newest. When `q` is set, `limit` is ignored. |
 | `lib-index` | no   | Which `jellyfin_movies` path to use (default `0`). |
 
 ```bash
 curl http://localhost:8090/media/movies/titles
 curl "http://localhost:8090/media/movies/titles?q=inception"
+curl "http://localhost:8090/media/movies/titles?limit=20"
 ```
 
 ```json

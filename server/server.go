@@ -22,8 +22,9 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 		mgr := mediaManager(cfg, "")
+		q := r.URL.Query().Get("q")
 
-		names, err := mgr.ListMedia(limit)
+		names, err := mgr.ListMedia(q, limit)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -77,7 +78,12 @@ func New(cfg *config.Config) http.Handler {
 		}
 
 		q := r.URL.Query().Get("q")
-		names, err := mgr.ListLibraryTitles(q)
+		limit, err := queryInt(r, "limit", 0)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		names, err := mgr.ListLibraryTitles(q, limit)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -94,7 +100,12 @@ func New(cfg *config.Config) http.Handler {
 		}
 
 		q := r.URL.Query().Get("q")
-		names, err := mgr.ListLibraryTitles(q)
+		limit, err := queryInt(r, "limit", 0)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		names, err := mgr.ListLibraryTitles(q, limit)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
