@@ -136,3 +136,24 @@ func uploadScopedFile(w http.ResponseWriter, r *http.Request, root string) {
 
 	w.WriteHeader(http.StatusCreated)
 }
+
+func deleteScopedFile(w http.ResponseWriter, r *http.Request, root string) {
+	path := r.URL.Query().Get("path")
+	path, _, err := resolveScopedFile(path, root)
+	if err != nil {
+		if errors.Is(err, errFileNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else if errors.Is(err, errFilePathRequired) || errors.Is(err, errFilePathRelative) || errors.Is(err, errFileIsNotRegular) || errors.Is(err, errFileOutsideRoot) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if err := os.Remove(path); err != nil {
+		http.Error(w, fmt.Sprintf("failed to delete file: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

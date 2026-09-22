@@ -245,6 +245,80 @@ func TestUploadScopedFileRejectsSymlinkOutsidePath(t *testing.T) {
 	}
 }
 
+func TestDeleteScopedFile(t *testing.T) {
+	cfg := testConfig(t)
+	target := filepath.Join(cfg.Media, "delete-me.mkv")
+	if err := os.WriteFile(target, []byte("video data"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodDelete, "/media/file?path="+url.QueryEscape(target), nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusNoContent, resp.Code, resp.Body.String())
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("expected file to be deleted")
+	}
+}
+
+func TestDeleteScopedFileRejectsOutsidePath(t *testing.T) {
+	cfg := testConfig(t)
+	target := filepath.Join(filepath.Dir(cfg.Media), "outside.mkv")
+	if err := os.WriteFile(target, []byte("secret"), 0644); err != nil {
+		t.Fatalf("failed to create outside file: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodDelete, "/media/file?path="+url.QueryEscape(target), nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, resp.Code, resp.Body.String())
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected outside file to remain: %v", err)
+	}
+}
+
+func TestDeleteScopedFileNotFound(t *testing.T) {
+	cfg := testConfig(t)
+	target := filepath.Join(cfg.Media, "missing.mkv")
+	req := httptest.NewRequest(http.MethodDelete, "/media/file?path="+url.QueryEscape(target), nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusNotFound, resp.Code, resp.Body.String())
+	}
+}
+
+func TestDeleteScopedFileRejectsDirectory(t *testing.T) {
+	cfg := testConfig(t)
+	target := filepath.Join(cfg.Media, "directory")
+	if err := os.Mkdir(target, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodDelete, "/media/file?path="+url.QueryEscape(target), nil)
+	req.Header.Set("X-Jellybrarian-Token", "test-secret")
+	resp := httptest.NewRecorder()
+
+	New(cfg).ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, resp.Code, resp.Body.String())
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected directory to remain: %v", err)
+	}
+}
+
 func TestServeFFProbe(t *testing.T) {
 	cfg := testConfig(t)
 	path := filepath.Join(cfg.Media, "inspect.mkv")
