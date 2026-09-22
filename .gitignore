@@ -2,3 +2,4 @@
 jellybrarian
 config.toml
 .DS_Store
+deploy.sh
