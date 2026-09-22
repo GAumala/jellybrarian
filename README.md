@@ -212,7 +212,7 @@ Extracts one audio stream from a video file under the configured **media** direc
 | `path` | yes | Absolute video file path under the configured `media` directory. |
 | `type` | yes | `raw` to copy the stream without re-encoding, or `wav` to convert it to mono 22050 Hz WAV. |
 | `stream` | yes | ffmpeg stream map, such as `0:1` or `0:a:1`. |
-| `ext` | raw only | Output extension: `aac` or `m4a`. |
+| `ext` | raw only | Output extension: `aac`, `ac3`, or `m4a`. |
 | `lib-index` | — | Ignored for this route. |
 
 The response is streamed directly from ffmpeg and is not written to the server filesystem. For `raw`, `aac` is written as ADTS and `m4a` as fragmented MP4, both with `-c:a copy`. For `wav`, ffmpeg uses `-ac 1 -ar 22050 -f wav`.
@@ -402,7 +402,7 @@ Extracts one audio stream from a video file under the selected **TV** Jellyfin l
 | `path` | yes | Absolute video file path under the selected TV library. |
 | `type` | yes | `raw` or `wav`. |
 | `stream` | yes | ffmpeg stream map, such as `0:1` or `0:a:1`. |
-| `ext` | raw only | Output extension: `aac` or `m4a`. |
+| `ext` | raw only | Output extension: `aac`, `ac3`, or `m4a`. |
 | `lib-index` | no | Which `jellyfin_tv` path to use (default `0`). |
 
 The extracted audio is streamed directly to the response.
@@ -422,7 +422,7 @@ Extracts one audio stream from a video file under the selected **movies** Jellyf
 | `path` | yes | Absolute video file path under the selected movies library. |
 | `type` | yes | `raw` or `wav`. |
 | `stream` | yes | ffmpeg stream map, such as `0:1` or `0:a:1`. |
-| `ext` | raw only | Output extension: `aac` or `m4a`. |
+| `ext` | raw only | Output extension: `aac`, `ac3`, or `m4a`. |
 | `lib-index` | no | Which `jellyfin_movies` path to use (default `0`). |
 
 The extracted audio is streamed directly to the response.
@@ -684,9 +684,14 @@ For `type=raw&ext=aac`:
 ffmpeg -nostdin -v error -i "$path" -map "$stream" -c:a copy -f adts pipe:1
 ```
 
+For `type=raw&ext=ac3`:
+```text
+ffmpeg -nostdin -v error -i "$path" -map "$stream" -c:a copy -f ac3 pipe:1
+```
+
 For `type=raw&ext=m4a`:
 ```text
-ffmpeg -nostdin -v error -i "$path" -map "$stream" -c:a copy -f mp4 -movflags frag_keyframe+empty_moov pipe:1
+ffmpeg -nostdin -v error -i "$path" -map "$stream" -c:a copy -f mp4 -movflags frag_keyframe+empty_moov+default_base_moof -avoid_negative_ts make_zero pipe:1
 ```
 
 The fragmented MP4 flags are required because stdout is not seekable.

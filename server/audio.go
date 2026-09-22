@@ -39,8 +39,8 @@ func serveAudio(w http.ResponseWriter, r *http.Request, root string) {
 			http.Error(w, "ext query parameter is required for raw output", http.StatusBadRequest)
 			return
 		}
-		if ext != "aac" && ext != "m4a" {
-			http.Error(w, "ext must be aac or m4a", http.StatusBadRequest)
+		if ext != "aac" && ext != "ac3" && ext != "m4a" {
+			http.Error(w, "ext must be aac, ac3, or m4a", http.StatusBadRequest)
 			return
 		}
 	} else {
@@ -63,6 +63,8 @@ func audioContentType(typeName, ext string) string {
 	switch strings.ToLower(ext) {
 	case "aac":
 		return "audio/aac"
+	case "ac3":
+		return "audio/ac3"
 	case "m4a":
 		return "audio/mp4"
 	default:

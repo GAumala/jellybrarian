@@ -73,8 +73,8 @@ func audioArgs(path string, options AudioOptions) ([]string, error) {
 	if options.Type != "raw" && options.Type != "wav" {
 		return nil, fmt.Errorf("type must be raw or wav")
 	}
-	if options.Type == "raw" && options.Ext != "aac" && options.Ext != "m4a" {
-		return nil, fmt.Errorf("ext must be aac or m4a for raw output")
+	if options.Type == "raw" && options.Ext != "aac" && options.Ext != "ac3" && options.Ext != "m4a" {
+		return nil, fmt.Errorf("ext must be aac, ac3, or m4a for raw output")
 	}
 
 	args := []string{"-nostdin", "-v", "error", "-i", path, "-map", options.Stream}
@@ -86,9 +86,11 @@ func audioArgs(path string, options AudioOptions) ([]string, error) {
 		switch options.Ext {
 		case "aac":
 			return append(args, "-f", "adts", "pipe:1"), nil
+		case "ac3":
+			return append(args, "-f", "ac3", "pipe:1"), nil
 		case "m4a":
 			// Fragmented MP4 can be written to stdout without seeking.
-			return append(args, "-f", "mp4", "-movflags", "frag_keyframe+empty_moov", "pipe:1"), nil
+			return append(args, "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-avoid_negative_ts", "make_zero", "pipe:1"), nil
 		}
 	}
 	return nil, fmt.Errorf("unsupported audio output: type=%q ext=%q", options.Type, options.Ext)
