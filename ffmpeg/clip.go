@@ -290,7 +290,9 @@ func formatDuration(value time.Duration) string {
 func escapeFilterPath(path string) string {
 	replacer := strings.NewReplacer(
 		`\`, `\\`,
-		`'`, `\'`,
+		// Inside a quoted filter value, close the quote, escape the apostrophe,
+		// and reopen the quote. A backslash alone does not escape a quote there.
+		`'`, `'\''`,
 		`:`, `\:`,
 		`,`, `\,`,
 		`;`, `\;`,

@@ -87,6 +87,28 @@ func TestClipArgsEncodesAACWhenBurningSubtitles(t *testing.T) {
 	}
 }
 
+func TestClipArgsEscapesApostropheInSubtitlePath(t *testing.T) {
+	options := ClipOptions{Duration: time.Second, SubtitlePath: "/library/Don't Play/movie.srt"}
+	streams := clipStreams{
+		video: probeStream{Index: 0, CodecName: "h264", CodecType: "video"},
+	}
+	args := clipArgs("/library/movie.mkv", "/tmp/clip.mp4", options, streams)
+	filterIndex := -1
+	for i, arg := range args {
+		if arg == "-vf" {
+			filterIndex = i + 1
+			break
+		}
+	}
+	if filterIndex < 0 {
+		t.Fatal("expected video filter argument")
+	}
+	want := "subtitles=filename='/library/Don'\\''t Play/movie.srt'"
+	if !strings.Contains(args[filterIndex], want) {
+		t.Fatalf("filter %q does not contain escaped path %q", args[filterIndex], want)
+	}
+}
+
 func TestCreateClipRejectsWrongStreamType(t *testing.T) {
 	binDir := setupClipTools(t, `{"streams":[{"index":0,"codec_name":"h264","codec_type":"video"},{"index":1,"codec_name":"aac","codec_type":"audio"}]}`, false)
 	t.Setenv("PATH", binDir)
