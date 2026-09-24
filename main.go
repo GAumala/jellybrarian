@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"jellybrarian/config"
+	"jellybrarian/ffmpeg"
 	"jellybrarian/server"
 )
 
@@ -22,6 +23,9 @@ func main() {
 	log.Printf("jellyfin music:  %v", cfg.JellyfinMusic)
 	log.Printf("jellyfin movies: %v", cfg.JellyfinMovies)
 	log.Printf("jellyfin tv:     %v", cfg.JellyfinTV)
+	if err := ffmpeg.CleanupClipTempDir(); err != nil {
+		log.Printf("failed to clean stale clips: %v", err)
+	}
 
 	handler := server.New(cfg)
 

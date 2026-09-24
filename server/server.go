@@ -168,6 +168,15 @@ func New(cfg *config.Config) http.Handler {
 		serveAudio(w, r, mgr.LibraryDir)
 	})
 
+	mux.HandleFunc("GET /media/movies/clip", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryMovies)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveClip(w, r, mgr.LibraryDir)
+	})
+
 	mux.HandleFunc("GET /media/tv/files", func(w http.ResponseWriter, r *http.Request) {
 		mgr, err := createMediaManager(r, cfg, LibraryTV)
 		if err != nil {
@@ -220,6 +229,15 @@ func New(cfg *config.Config) http.Handler {
 			return
 		}
 		serveAudio(w, r, mgr.LibraryDir)
+	})
+
+	mux.HandleFunc("GET /media/tv/clip", func(w http.ResponseWriter, r *http.Request) {
+		mgr, err := createMediaManager(r, cfg, LibraryTV)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		serveClip(w, r, mgr.LibraryDir)
 	})
 
 	mux.HandleFunc("PUT /media/artists/{artist}/organize", func(w http.ResponseWriter, r *http.Request) {

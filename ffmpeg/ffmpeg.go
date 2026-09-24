@@ -20,7 +20,7 @@ type AudioOptions struct {
 func Probe(ctx context.Context, path string) ([]byte, error) {
 	ffprobe, err := exec.LookPath("ffprobe")
 	if err != nil {
-		return nil, fmt.Errorf("ffprobe executable not found: %w", err)
+		return nil, fmt.Errorf("%w: ffprobe: %v", ErrExecutableMissing, err)
 	}
 	cmd := exec.CommandContext(ctx, ffprobe, "-v", "error", "-show_format", "-show_streams", "-of", "json", path)
 	output, err := cmd.Output()

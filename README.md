@@ -94,6 +94,8 @@ Most HTTP endpoints take an optional query parameter **`lib-index`** (integer, d
 | `GET /media/movies/ffprobe` | `jellyfin_movies` |
 | `GET /media/tv/audio` | `jellyfin_tv` |
 | `GET /media/movies/audio` | `jellyfin_movies` |
+| `GET /media/tv/clip` | `jellyfin_tv` |
+| `GET /media/movies/clip` | `jellyfin_movies` |
 | `PUT /media/artists/{artist}/organize` | `jellyfin_music` |
 | `PUT /media/artists/{artist}/delist` | `jellyfin_music` |
 | `PUT /media/tv/add` | `jellyfin_tv` |
@@ -475,6 +477,48 @@ Extracts one audio stream from a video file under the selected **movies** Jellyf
 The extracted audio is streamed directly to the response.
 
 The exact ffmpeg commands used are listed in [Audio Extraction Commands](#audio-extraction-commands).
+
+---
+
+### `GET /media/tv/clip` and `GET /media/movies/clip`
+
+Creates a downloadable MP4 clip from a video in the selected TV or movies library. The source and any sidecar subtitle path must be absolute paths inside that same library. Symlinks are resolved before the paths are checked.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | yes | Absolute source video path under the selected library. |
+| `start` | yes | Non-negative start time in seconds or `HH:MM:SS[.mmm]` format. |
+| `duration` | yes | Positive duration in seconds or timestamp format, up to 5 minutes. |
+| `audio-stream` | no | Absolute audio stream index from ffprobe. Defaults to the first audio stream. |
+| `subtitle-stream` | no | Absolute embedded subtitle stream index from ffprobe. The subtitle is burned into the clip. |
+| `subtitle-path` | no | Absolute sidecar subtitle path under the selected library. Mutually exclusive with `subtitle-stream`. |
+| `lib-index` | no | Which library path to use (default `0`). |
+
+Without subtitles, ffmpeg copies the video stream. The requested start is therefore constrained by source keyframes and may not be frame-exact. AAC audio is copied; other selected audio codecs are converted to AAC for MP4 compatibility.
+
+Burning subtitles requires video encoding. In that mode only the requested segment is encoded to H.264 and its audio is encoded to AAC to keep the accurately cut video and audio aligned; ffmpeg seeks before reading the input rather than decoding the full movie first.
+
+The server finishes a conventional MP4 in `${TMPDIR:-/tmp}/jellybrarian-clips` before sending the response. It removes the file after the transfer or a failed request, removes partial output after ffmpeg errors, and cleans stale `clip-*.mp4` files at startup. A full temporary filesystem or exhausted disk quota returns **507 Insufficient Storage** without beginning the download. When overriding `TMPDIR` in Docker, the mounted directory must be owned by container UID `1000`.
+
+```bash
+curl -G "http://localhost:8090/media/movies/clip" \
+  --data-urlencode "path=/mnt/hdd0/jellyfin/movies/Inception (2010)/Inception (2010).mkv" \
+  --data-urlencode "start=01:12:30.500" \
+  --data-urlencode "duration=30" \
+  --data-urlencode "audio-stream=2" \
+  --data-urlencode "subtitle-stream=4" \
+  -o inception-clip.mp4
+
+curl -G "http://localhost:8090/media/tv/clip" \
+  --data-urlencode "path=/mnt/hdd0/jellyfin/tv/Example/Season 1/Example - S01E01.mkv" \
+  --data-urlencode "start=00:15:00" \
+  --data-urlencode "duration=45" \
+  -o episode-clip.mp4
+```
+
+Timestamp values containing colons require the full `HH:MM:SS` form.
 
 ---
 
