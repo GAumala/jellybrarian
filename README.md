@@ -40,7 +40,6 @@ Copy and edit `config.toml`.
 | Key | Required | Description |
 |-----|----------|-------------|
 | `media` | **yes** | Root folder for downloads and staging (where new rips land). Must exist as a directory. |
-| `auth_token` | no | Secret token required on every HTTP request when set. Omit or leave empty to disable authentication. |
 | `jellyfin_music` | no | Music library root(s). Omit if you only use movies/TV. |
 | `jellyfin_movies` | no | Movie library root(s). |
 | `jellyfin_tv` | no | TV library root(s). |
@@ -49,7 +48,6 @@ Each `jellyfin_*` value may be either a **single string** or a **TOML array of s
 
 ```toml
 media = "/mnt/hdd0/media"
-auth_token = "replace-with-a-long-random-secret"
 
 jellyfin_music  = "/mnt/hdd0/jellyfin/music"
 jellyfin_movies = "/mnt/ssd/jellyfin/movies"
@@ -64,11 +62,15 @@ Validation on startup:
 
 ## Authentication
 
-When `auth_token` is set, every endpoint requires the configured token in one of these headers:
+Set `JELLYBRARIAN_AUTH_TOKEN` to require authentication for every endpoint. An
+unset or empty value disables authentication. For local use, copy `.env.example`
+to the gitignored `.env` file; Docker can load it with `--env-file .env`.
+
+Authenticated requests can provide the token in either of these headers:
 
 ```bash
-curl -H "Authorization: Bearer $JELLYBRARIAN_TOKEN" http://localhost:8090/media/list
-curl -H "X-Jellybrarian-Token: $JELLYBRARIAN_TOKEN" http://localhost:8090/media/list
+curl -H "Authorization: Bearer $JELLYBRARIAN_AUTH_TOKEN" http://localhost:8090/media/list
+curl -H "X-Jellybrarian-Token: $JELLYBRARIAN_AUTH_TOKEN" http://localhost:8090/media/list
 ```
 
 ### Choosing a library at runtime (`lib-index`)
@@ -578,7 +580,7 @@ media staging directory are not deleted.
 | `lib-index` | no   | Which `jellyfin_music` path to use (default `0`). |
 
 ```bash
-curl -X PUT -H "X-Jellybrarian-Token: $JELLYBRARIAN_TOKEN" http://localhost:8090/media/artists/Radiohead/delist
+curl -X PUT -H "X-Jellybrarian-Token: $JELLYBRARIAN_AUTH_TOKEN" http://localhost:8090/media/artists/Radiohead/delist
 ```
 
 Response:
@@ -798,7 +800,8 @@ These commands are identical for `GET /media/audio`, `GET /media/tv/audio`, and 
 
 ## Deploy with Docker
 
-Edit `config.toml` with your actual paths, then on the Pi:
+Edit `config.toml` with your actual paths and create `.env` from `.env.example`,
+then on the Pi:
 
 ```bash
 git clone <repo> && cd jellybrarian
@@ -807,6 +810,7 @@ docker run -d \
   --name jellybrarian \
   --restart unless-stopped \
   --user 1000 \
+  --env-file .env \
   -p 8296:8090 \
   -v "$(pwd)/config.toml:/app/config.toml:ro" \
   -v /mnt/hdd0:/mnt/hdd0 \
@@ -837,5 +841,6 @@ jellybrarian/
 │   ├── library.go       # LibraryKind, createMediaManager, lib-index resolution
 │   └── input.go         # query parameter helpers
 ├── Dockerfile
+├── .env.example
 └── config.toml
 ```

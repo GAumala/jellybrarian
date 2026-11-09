@@ -7,6 +7,8 @@ import (
 )
 
 func TestLoadWithoutAuthToken(t *testing.T) {
+	t.Setenv("JELLYBRARIAN_AUTH_TOKEN", "")
+
 	root := t.TempDir()
 	mediaDir := filepath.Join(root, "media")
 	if err := os.MkdirAll(mediaDir, 0755); err != nil {
@@ -21,7 +23,7 @@ func TestLoadWithoutAuthToken(t *testing.T) {
 
 	cfg, err := Load(configPath)
 	if err != nil {
-		t.Fatalf("expected config to load without auth_token, got %v", err)
+		t.Fatalf("expected config to load without an auth token, got %v", err)
 	}
 	if cfg.AuthToken != "" {
 		t.Fatalf("expected empty auth token, got %q", cfg.AuthToken)
@@ -29,6 +31,8 @@ func TestLoadWithoutAuthToken(t *testing.T) {
 }
 
 func TestLoadAuthToken(t *testing.T) {
+	t.Setenv("JELLYBRARIAN_AUTH_TOKEN", "test-secret")
+
 	root := t.TempDir()
 	mediaDir := filepath.Join(root, "media")
 	if err := os.MkdirAll(mediaDir, 0755); err != nil {
@@ -36,9 +40,7 @@ func TestLoadAuthToken(t *testing.T) {
 	}
 
 	configPath := filepath.Join(root, "config.toml")
-	body := `media = "` + filepath.ToSlash(mediaDir) + `"
-auth_token = "test-secret"
-`
+	body := `media = "` + filepath.ToSlash(mediaDir) + `"`
 	if err := os.WriteFile(configPath, []byte(body), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
